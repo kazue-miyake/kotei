@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>製造工程表</title>
+<style>
+:root{
+  --ink:#1b2430; --navy:#22456b; --navy-d:#182f4b; --paper:#f3f2ee; --line:#c9c6bd;
+  --cell:#ffffff; --accent:#b4551f; --soft:#e8ecf2; --ok:#2e7d4f; --mut:#7a7f88;
+  --memo:#fdf8e2; --memo-ink:#6a4a00;
+  --mono:"Consolas","Menlo","Osaka-Mono",monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic UI","Yu Gothic","Meiryo",sans-serif;
+  background:var(--paper);color:var(--ink);font-size:14px}
+button{font-family:inherit;cursor:pointer}
+input,select{font-family:inherit;font-size:14px;color:var(--ink)}
+
+/* ===== app header ===== */
+.topbar{background:var(--navy);color:#fff;padding:8px 14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.topbar h1{font-size:16px;margin:0;letter-spacing:.2em;font-weight:700}
+.topbar .sub{font-size:11px;opacity:.75;letter-spacing:.05em}
+.tabs{display:flex;gap:2px;margin-left:auto}
+.tabs button{background:var(--navy-d);color:#cfd9e6;border:none;padding:7px 16px;font-size:12.5px;border-radius:5px 5px 0 0}
+.tabs button.on{background:var(--paper);color:var(--ink);font-weight:700}
+.savestat{font-size:11px;color:#bcd0e6;min-width:110px;text-align:right}
+.savestat.err{color:#ffb3a0}
+
+.wrap{padding:10px 14px 60px}
+.pane{display:none}
+.pane.on{display:block}
+
+/* ===== control bar ===== */
+.ctrl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff;border:1px solid var(--line);
+  border-radius:6px;padding:8px 10px;margin-bottom:8px}
+.ctrl label{font-size:11.5px;color:var(--mut)}
+.ctrl input[type=date]{padding:4px 6px;border:1px solid var(--line);border-radius:4px;font-size:13px}
+.ctrl select{padding:4px 6px;border:1px solid var(--line);border-radius:4px}
+.btn{border:1px solid var(--navy);background:#fff;color:var(--navy);padding:5px 11px;border-radius:4px;font-size:12px}
+.btn:hover{background:var(--soft)}
+.btn.pri{background:var(--navy);color:#fff}
+.btn.warn{border-color:#a33;color:#a33}
+.chip{background:var(--navy-d);color:#fff;border-radius:4px;padding:5px 12px;font-size:12px;display:inline-flex;gap:8px;align-items:center}
+.chip b{font-family:var(--mono);font-size:16px;letter-spacing:.03em}
+.sep{width:1px;height:22px;background:var(--line)}
+
+/* ===== attendance editor ===== */
+.attbox{background:#fff;border:1px solid var(--line);border-radius:6px;margin-bottom:8px}
+.attbox .hd{display:flex;align-items:center;gap:10px;padding:6px 10px;border-bottom:1px solid var(--line);background:#fafaf7;border-radius:6px 6px 0 0}
+.attbox .hd h2{font-size:12.5px;margin:0}
+.attstrip{display:flex;overflow-x:auto;padding:8px 10px;gap:0}
+table.attT{border-collapse:collapse}
+table.attT th{font-size:10px;color:var(--mut);font-weight:600;padding:2px 6px;text-align:right;white-space:nowrap}
+table.attT td{border:1px solid var(--line);padding:0;min-width:64px}
+table.attT td input{width:70px;border:none;padding:4px 4px;text-align:center;font-size:13px;background:transparent}
+table.attT td select{width:80px;border:none;padding:4px 2px;font-size:13px;background:transparent;text-align:center}
+table.attT td.fx{background:#eef2f7}
+table.attT td.oth{background:#e7f3e7}
+table.attT td.nm.oth{background:#d9ecd9}
+.grip{cursor:grab;font-size:13px;color:var(--mut);padding:0 3px;user-select:none;display:inline-block}
+td.rownum{cursor:grab}
+tr.dropTgt td{border-top:2px solid var(--accent)!important}
+table.attT td input.tm{font-family:var(--mono)}
+table.attT td.nm{background:var(--soft);font-weight:700}
+table.attT td.ops{border:none;background:transparent;text-align:center}
+.mini{border:1px solid var(--line);background:#fff;border-radius:3px;font-size:10px;padding:1px 5px;color:var(--mut)}
+.mini:hover{color:var(--ink);border-color:var(--ink)}
+
+/* ===== blocks ===== */
+.blockbox{margin-bottom:10px}
+.blkhd{display:flex;align-items:center;gap:8px;margin:0 0 4px;flex-wrap:wrap}
+.blkhd .blkname{font-size:13px;font-weight:700;color:var(--navy);background:var(--soft);border-radius:4px;padding:4px 12px}
+.blkhd input.blktitle{font-size:13px;font-weight:700;color:var(--navy);border:1px solid var(--line);border-radius:4px;padding:4px 8px;width:200px;background:#fff}
+
+/* ===== main table ===== */
+.tblwrap{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:6px}
+table.main{border-collapse:collapse;width:100%;min-width:1600px}
+table.main th{background:var(--navy);color:#fff;font-size:12px;font-weight:600;padding:4px 3px;border:1px solid #3a5b82;white-space:nowrap;position:sticky;top:0;z-index:2}
+table.main td{border:1px solid #dedbd2;padding:0;height:34px;background:var(--cell)}
+table.main tr:nth-child(even) td{background:#fbfaf7}
+table.main input,table.main select{width:100%;height:100%;border:none;background:transparent;padding:2px 4px}
+table.main input:focus,table.main select:focus{outline:2px solid var(--navy);outline-offset:-2px;background:#fff}
+td.num{width:34px} td.num input{text-align:center;font-family:var(--mono)}
+td.tm{width:52px} td.tm input{text-align:center;font-family:var(--mono);font-size:14px}
+td.calc{text-align:center;font-family:var(--mono);font-size:14px;color:var(--ink);width:46px;padding:2px}
+td.calc.auto{color:var(--navy);font-weight:700}
+td.name{min-width:190px}
+td.note{min-width:150px}
+td.sym{width:52px;text-align:center;font-family:var(--mono);font-size:13px;color:var(--mut)}
+td.rice{width:62px}
+td.asg{width:78px;position:relative}
+td.asg select{font-size:13px}
+td.rownum{width:24px;text-align:center;color:var(--mut);font-size:10px;background:#f4f3ef!important}
+td.ops2{width:206px;text-align:center;background:#f4f3ef!important;white-space:nowrap;
+  position:sticky;right:0;z-index:1;border-left:2px solid var(--line)!important}
+td.ops2 .mini{font-size:12.5px;font-weight:700;color:var(--navy);border-color:#93a2b8;padding:3px 6px}
+td.ops2 .mini:hover{background:var(--soft);border-color:var(--navy)}
+table.main th.opsh{position:sticky;right:0;z-index:3;border-left:2px solid #3a5b82}
+tr.manrow td.asg{background:#fdf3ec!important}
+tr.manrow .mini.asgr{color:var(--accent);border-color:var(--accent)}
+input.man{color:var(--accent);font-weight:700}
+tr.memoRow td{background:var(--memo)!important}
+tr.parRow td{background:#e8f0f7!important}
+td.memoTd input{font-weight:700;color:var(--memo-ink);font-size:14px}
+.endcell{display:flex;align-items:center;height:100%}
+.endcell input{flex:1}
+.endcell .rst{display:none;border:none;background:none;color:var(--accent);font-size:10px;padding:0 3px}
+.endcell.isman .rst{display:block}
+.swap{position:absolute;right:-8px;top:50%;transform:translateY(-50%);z-index:3;border:1px solid var(--line);
+  background:#fff;border-radius:50%;width:15px;height:15px;font-size:9px;line-height:1;color:var(--mut);padding:0;display:none}
+td.asg:hover .swap{display:block}
+.agrip{position:absolute;left:0;top:50%;transform:translateY(-50%);display:none;cursor:grab;
+  font-size:11px;color:var(--mut);z-index:3;background:#fff;border-radius:3px;padding:0 1px;line-height:1}
+td.asg:hover .agrip{display:block}
+td.asg.dropTgtA{outline:2px dashed var(--accent);outline-offset:-2px}
+.legend{font-size:11px;color:var(--mut);margin-top:6px;line-height:1.7}
+.legend b{color:var(--accent)}
+
+/* ===== master / member tabs ===== */
+.card{background:#fff;border:1px solid var(--line);border-radius:6px;padding:10px}
+table.mst{border-collapse:collapse;width:100%;max-width:1000px}
+table.mst th{background:var(--navy);color:#fff;font-size:11px;padding:4px 6px;border:1px solid #3a5b82;position:sticky;top:0}
+table.mst td{border:1px solid #dedbd2;padding:0}
+table.mst input,table.mst select{width:100%;border:none;padding:4px 6px;background:transparent}
+table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
+.mrow{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+.mrow input[type=text]{padding:5px 8px;border:1px solid var(--line);border-radius:4px}
+.memlist{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.memchip{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:4px 6px 4px 12px;display:flex;align-items:center;gap:6px;font-size:13px}
+.memchip button{border:none;background:#fff;border-radius:50%;width:18px;height:18px;font-size:10px;color:#a33;line-height:1}
+.hint{font-size:11px;color:var(--mut);margin:6px 0}
+.banner{background:#fdeee2;border:1px solid #e4b08a;color:#7c3d0e;padding:6px 10px;border-radius:5px;font-size:12px;margin-bottom:8px;display:none}
+
+/* ===== print ===== */
+#printSheet{display:none;font-size:20pt;color:#000;background:#fff}
+#printSheet .pcont{font-size:14pt;font-weight:700;margin:0 0 2mm}
+#printSheet .phead{display:flex;align-items:flex-start;gap:6mm;margin-bottom:2mm}
+#printSheet h1{font-size:20pt;margin:0;letter-spacing:.3em}
+#printSheet .pdate{font-size:18pt;font-weight:700;margin-top:1mm}
+#printSheet .pmorn{font-size:14pt;border:1.5pt solid #000;padding:1mm 3mm;margin-top:1mm;white-space:nowrap}
+#printSheet .pmorn b{font-size:22pt;font-family:var(--mono)}
+#printSheet table{border-collapse:collapse}
+#printSheet table.patt{margin-left:0}
+#printSheet table.patt td{border:.5pt solid #000;padding:.4mm 1mm;text-align:center;font-size:12pt;min-width:17mm;height:7mm}
+#printSheet table.patt td.pnm{font-weight:700;font-size:14pt}
+#printSheet table.pmain{width:1130pt;table-layout:fixed}
+#printSheet table.pmain th{border:.7pt solid #000;background:#e8e8e8;font-size:12pt;padding:.6mm .3mm;font-weight:700}
+#printSheet table.pmain td{border:.5pt solid #000;padding:.2mm .8mm;height:11.5mm;overflow:hidden;white-space:nowrap;font-size:20pt}
+#printSheet td.c{text-align:center}
+#printSheet td.mono,#printSheet th.mono{font-family:var(--mono)}
+#printSheet table.pmain td.pname{font-size:16pt;white-space:normal;line-height:1.05;font-weight:700}
+#printSheet table.pmain td.pasg{font-size:10pt}
+#printSheet table.pmain td.sm10{font-size:10pt}
+#printSheet table.pmain td.big{font-weight:700}
+#printSheet table.pmain td.pnote{white-space:normal;line-height:1.1;font-weight:400}
+#printSheet table.pmain td.sm8{font-size:6pt}
+#printSheet table.pmain th.sm8h{font-size:6pt;white-space:normal;line-height:1.05}
+#printSheet table.pmain td.pmemo{font-size:14pt;font-weight:700;text-align:left;white-space:normal;line-height:1.1;background:#f5f0dc}
+#printSheet table.pmain td.pblkt{font-size:14pt;font-weight:700;text-align:left;background:#d8d8d8;letter-spacing:.1em}
+#printSheet table.pmain tr.ppar td{background:#e9e9e9}
+#printSheet table.pmain tr.ppar td:first-child{border-left:3pt solid #000}
+/* ===== login ===== */
+#loginOv{position:fixed;inset:0;background:var(--paper);z-index:100;display:flex;align-items:center;justify-content:center}
+#loginOv .box{background:#fff;border:1px solid var(--line);border-radius:8px;padding:28px 32px;width:340px;box-shadow:0 4px 18px rgba(0,0,0,.08)}
+#loginOv h2{margin:0 0 4px;font-size:17px;letter-spacing:.15em;color:var(--navy)}
+#loginOv .sub2{font-size:11px;color:var(--mut);margin-bottom:16px}
+#loginOv label{display:block;font-size:11.5px;color:var(--mut);margin:10px 0 3px}
+#loginOv input{width:100%;padding:8px;border:1px solid var(--line);border-radius:5px;font-size:14px}
+#loginOv button{width:100%;margin-top:16px;padding:9px;background:var(--navy);color:#fff;border:none;border-radius:5px;font-size:14px;font-weight:700}
+#loginOv .err{color:#a33;font-size:12px;margin-top:10px;min-height:16px}
+@media print{
+  @page{size:A3 landscape;margin:7mm}
+  body{background:#fff}
+  .app{display:none!important}
+  #printSheet{display:block}
+  .ppage{page-break-after:always}
+  .ppage:last-child{page-break-after:auto}
+}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="topbar">
+  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v22 クラウド</span>
+  <span class="savestat" id="saveStat"></span>
+  <button class="btn" id="btnLogout" style="font-size:11px;padding:3px 8px;border-color:#8fa5c0;color:#cfd9e6;background:transparent">ログアウト</button>
+  <div class="tabs">
+    <button id="tabK" class="on">工程表</button>
+    <button id="tabM">商品マスター</button>
+    <button id="tabP">メンバー</button>
+  </div>
+</div>
+<div class="wrap">
+<div class="banner" id="storBanner">保存機能に接続できませんでした。入力内容はこの画面を閉じると消えます。ページを再読み込みしてください。</div>
+
+<!-- ============ 工程表 ============ -->
+<div class="pane on" id="paneK">
+  <div class="ctrl">
+    <label>製造日</label>
+    <input type="date" id="dateSel">
+    <select id="savedSel"><option value="">保存済み一覧…</option></select>
+    <span class="sep"></span>
+    <div class="chip">盛付朝礼 <b id="mornChip">--:--</b></div>
+    <span class="sep"></span>
+    <label>ひな形</label>
+    <select id="tplSel"><option value="">テンプレート一覧…</option></select>
+    <button class="btn" id="btnTplApply">この日に流し込む</button>
+    <button class="btn" id="btnTplSave">今の内容をひな形登録</button>
+    <button class="btn warn" id="btnTplDel">ひな形削除</button>
+    <span class="sep"></span>
+    <button class="btn" id="btnCopy">別の日へコピー</button>
+    <button class="btn pri" id="btnSaveNow">今すぐ保存</button>
+    <button class="btn" id="btnReload">最新を再読込</button>
+    <button class="btn warn" id="btnDelDay">この日を削除</button>
+    <span class="sep"></span>
+    <button class="btn" id="btnExport">バックアップ保存</button>
+    <button class="btn" id="btnImport">バックアップ読込</button>
+    <input type="file" id="impFile" accept=".json" style="display:none">
+    <span class="sep"></span>
+    <button class="btn pri" id="btnPrint">印刷 / PDF (A3横)</button>
+  </div>
+
+  <div class="attbox">
+    <div class="hd">
+      <h2>出勤者(印刷では朝礼時刻の隣に表示されます)</h2>
+      <button class="btn" id="btnAttAdd">＋ 盛付の枠を追加</button>
+      <button class="btn" id="btnAttOther">＋ その他の枠を追加</button>
+      <span class="hint">左の4枠は調理・米・唐揚・仕込で固定。出勤時間は朝礼とルール(メンバータブ)から自動(手書き換え可・空欄で自動)。担当の自動割当は盛付枠の先頭4人。緑の「その他の枠」(洗浄・折など)は自動割当に数えません。枠は⠿をつかんでドラッグで移動、「盛/他」ボタンで種類切替</span>
+    </div>
+    <div class="attstrip"><table class="attT" id="attT"></table></div>
+  </div>
+
+  <div id="blocks"></div>
+  <button class="btn" id="btnBlk2">＋ 第2ブロックを追加(厨房さん など)</button>
+
+  <div class="legend">
+    ・一番下の商品の<b>予定終了(締切)</b>を入力すると、上へ向かって全行の時刻が自動でつながります(終了−切上時間=開始、その開始が上の行の終了)。終了を手入力した行は<b>オレンジ色</b>、「戻」で自動に戻ります。<br>
+    ・<b>切上分は直接入力もできます</b>(「のし作業 30分」など)。空欄に戻すと自動計算(食数×秒数+段取5分を5分切上)に戻ります。<br>
+    ・「<b>メ</b>」ボタンで行を<b>メモ行</b>(黄色)に切り替えられます。メモ行は時間計算に入らず、印刷では横長の太字で出ます。「挿」でその行の上に1行挿入できます。<br>
+    ・「<b>並</b>」ボタンで<b>並行作業の行</b>(青)になります。時間の流れから外れるので、他の行と時間が重なってOK(例: 7:00から山本さんが一人でブケAを流す)。開始か終了を手入力すると、もう片方は自動計算されます。担当も自動では入らないので手で選んでください。<br>
+    ・<b>予定開始も手入力で上書きできます</b>(オレンジ色になり、その行から上はその時刻でつながります)。「戻」で自動に戻ります。<br>
+    ・第2ブロック(厨房さん など)は独立した時刻のつながりを持ちます。担当①~⑥は、シフト表の盛付枠の並びが商品行に自動で入ります(第2ブロックは手動選択)。どこかの行で担当を変えると、その行から下は新しい並びになります。「担」で上の行の並びに戻せます。<br>
+    ・担当セルは<b>Deleteキーで空欄</b>にできます。数字などの欄は<b>Enterで下の行の同じ欄へ</b>移動します。<b>行は左端の番号をつかんでドラッグ</b>でも動かせます。<br>
+    ・並行行の印刷は、開始・終了の列は空欄になり、商品名の頭に「∥開始→終了」が太字で付きます(本流の時間列が上から順に読めるように)。<br>
+    ・出勤時間は朝礼時刻とメンバータブのルールから自動計算(手で書き換え可・空欄に戻すと自動)。担当の自動割当は盛付枠の先頭4人です。<br>
+    ・行数の目安は全体で35行まで(超えると注意が出ます)。21行を超えると印刷は自動で2枚目に続きます。
+  </div>
+  <datalist id="dlCode"></datalist>
+  <datalist id="dlName"></datalist>
+  <datalist id="dlRice"><option value="白"><option value="炊込"><option value="酢飯"><option value="稲荷"><option value="チキン"></datalist>
+  <datalist id="dlRole">
+    <option value="調"><option value="米"><option value="盛"><option value="仕"><option value="唐">
+    <option value="早洗"><option value="洗浄"><option value="折"><option value="配"><option value="シール">
+    <option value="売店"><option value="F"><option value="D"><option value="E"><option value="G"><option value="H">
+    <option value="唐・仕"><option value="F・仕">
+  </datalist>
+</div>
+
+<!-- ============ 商品マスター ============ -->
+<div class="pane" id="paneM">
+  <div class="card">
+    <div class="mrow">
+      <input type="text" id="mstFilter" placeholder="検索(番号・記号・商品名)" style="width:240px">
+      <button class="btn pri" id="btnMstAdd">＋ 商品を追加</button>
+      <span class="hint">変更は自動保存されます。ご飯の空欄は「白」扱いです。</span>
+    </div>
+    <div style="max-height:70vh;overflow:auto">
+      <table class="mst" id="mstT"></table>
+    </div>
+  </div>
+</div>
+
+<!-- ============ メンバー ============ -->
+<div class="pane" id="paneP">
+  <div class="card">
+    <div class="mrow">
+      <input type="text" id="memName" placeholder="名前">
+      <input type="text" id="memRule" placeholder="出勤時間ルール(例: -15 / 0 / 7:00)" style="width:230px">
+      <button class="btn pri" id="btnMemAdd">＋ 登録</button>
+    </div>
+    <div class="hint">ここで登録した人が、出勤者と盛付担当の選択肢になります。<br>
+      出勤時間ルール: 「<b>-15</b>」=朝礼の15分前 ／「<b>0</b>」=朝礼と同じ ／「<b>7:00</b>」=毎日7:00固定 ／ 空欄=自動なし。シフト表の出勤時間はこのルールから自動計算されます(毎日手で書き換えもできます)。</div>
+    <table class="mst" id="memT" style="max-width:560px"></table>
+  </div>
+</div>
+
+</div>
+</div>
+<div id="printSheet"></div>
+<div id="loginOv" style="display:none">
+  <div class="box">
+    <h2>製造工程表</h2>
+    <div class="sub2">社内専用ページです。ログインしてください。</div>
+    <label>メールアドレス</label>
+    <input type="email" id="lgEmail" value="kazue1350@gmail.com" autocomplete="username">
+    <label>パスワード</label>
+    <input type="password" id="lgPass" autocomplete="current-password">
+    <button id="lgBtn">ログイン</button>
+    <div class="err" id="lgErr"></div>
+  </div>
+</div>
+
+<script>
+/* ================= data ================= */
+const DEFAULT_MASTER = [];
+const DEFAULT_MEMBERS = [];
+/* 出勤時間ルール: "-15"=朝礼の15分前 / "0"=朝礼と同じ / "7:00"=固定時刻 / ""=自動なし */
+const DEFAULT_RULES = {};
+const ROLE_RULES = {"調理":"-55","米":"-25","唐揚":"5:00","仕込":""};
+const RICE_OPTS = ["","炊込","酢飯","稲荷","チキン","その他"];
+const BASE_ROWS = 20, BASE_ROWS2 = 8, PER_PAGE = 20, NASG = 6, SETUP_SEC = 300, MAX_ROWS = 35;
+
+let master = [], members = [], rules = {}, day = null, curDate = "";
+let storageOK = true;
+
+const $ = id => document.getElementById(id);
+const todayStr = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+const blankRow = () => ({type:"item",code:"",sym:"",name:"",qty:"",ken:"",sec:"",rice:"",ppl:"",min:"",start:"",startMan:false,end:"",endMan:false,par:false,asg:Array(NASG).fill(""),asgMan:false,note:""});
+const blankBlock = (title,n) => ({title:title||"",rows:Array.from({length:n},blankRow)});
+const blankDay = () => ({att:[],blocks:[blankBlock("",BASE_ROWS)]});
+const deepCopy = o => JSON.parse(JSON.stringify(o));
+
+/* v20形式(day.rows)や欠けている項目を今の形式に直す */
+function normDay(d){
+  if(!d) return blankDay();
+  if(Array.isArray(d.rows)){ d={att:d.att||[],blocks:[{title:"",rows:d.rows}]}; }
+  if(!Array.isArray(d.blocks)||!d.blocks.length) d.blocks=[blankBlock("",BASE_ROWS)];
+  d.blocks=d.blocks.slice(0,2);
+  d.blocks.forEach((b,bi)=>{
+    if(!b||typeof b!=="object") b=d.blocks[bi]=blankBlock("",bi===0?BASE_ROWS:BASE_ROWS2);
+    if(typeof b.title!=="string") b.title="";
+    if(!Array.isArray(b.rows)) b.rows=[];
+    const minR= bi===0?BASE_ROWS:BASE_ROWS2;
+    while(b.rows.length<minR) b.rows.push(blankRow());
+    b.rows.forEach(r=>{
+      if(r.type!=="memo") r.type="item";
+      if(r.min===undefined||r.min===null) r.min="";
+      if(r.start===undefined||r.start===null) r.start="";
+      if(r.startMan===undefined) r.startMan=false;
+      if(r.par===undefined) r.par=false;
+      if(!Array.isArray(r.asg)) r.asg=Array(NASG).fill("");
+      while(r.asg.length<NASG) r.asg.push("");
+      if(r.asgMan===undefined) r.asgMan=r.asg.some(x=>x);
+    });
+  });
+  if(!Array.isArray(d.att)) d.att=[];
+  return d;
+}
+function totalRows(){ return day.blocks.reduce((s,b)=>s+b.rows.length,0); }
+
+/* ================= storage (クラウド: Supabase東京) ================= */
+const SB_URL="https://fnlstmlcaivptqkkjgpn.supabase.co";
+const SB_ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZubHN0bWxjYWl2cHRxa2tqZ3BuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1NDA1MjgsImV4cCI6MjA5OTExNjUyOH0.iA9z-X6gvIZjhTszEYWK3WZZNZE35OAC7hceSYNjfvY";
+let lastErr="", sbAccess=null, tokTm=null, loadFailed=false;
+function sbAuthFetch(path,body){ return fetch(SB_URL+"/auth/v1/"+path,{method:"POST",headers:{apikey:SB_ANON,"Content-Type":"application/json"},body:JSON.stringify(body)}); }
+async function doLogin(email,pass){
+  const r=await sbAuthFetch("token?grant_type=password",{email,password:pass});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok||!j.access_token){
+    const m=j.error_description||j.msg||"";
+    throw new Error(/invalid/i.test(m)?"メールアドレスかパスワードが違います":(m||"ログインできませんでした"));
+  }
+  sbAccess=j.access_token;
+  try{ localStorage.setItem("kotei-rt",j.refresh_token); }catch(e){}
+  schedTok(j.expires_in);
+}
+async function tryRefresh(){
+  let rt=null; try{ rt=localStorage.getItem("kotei-rt"); }catch(e){}
+  if(!rt) return false;
+  try{
+    const r=await sbAuthFetch("token?grant_type=refresh_token",{refresh_token:rt});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.access_token) return false;
+    sbAccess=j.access_token;
+    try{ localStorage.setItem("kotei-rt",j.refresh_token); }catch(e){}
+    schedTok(j.expires_in); return true;
+  }catch(e){ return false; }
+}
+function schedTok(sec){ clearTimeout(tokTm); tokTm=setTimeout(tryRefresh,Math.max(60,((sec||3600)-300))*1000); }
+async function sbFetch(path,opt,retry){
+  opt=opt||{};
+  opt.headers=Object.assign({apikey:SB_ANON,Authorization:"Bearer "+sbAccess},opt.headers||{});
+  const r=await fetch(SB_URL+path,opt);
+  if(r.status===401&&retry!==false&&await tryRefresh()){ return sbFetch(path,opt,false); }
+  return r;
+}
+/* stGet: 通信失敗はエラーにする(「データなし」と区別して上書き事故を防ぐ) */
+async function stGet(k){
+  const r=await sbFetch("/rest/v1/kv?select=value&key=eq."+encodeURIComponent(k));
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  const j=await r.json();
+  return j.length? j[0].value : null;
+}
+async function stSet(k,v){
+  try{
+    const r=await sbFetch("/rest/v1/kv",{method:"POST",
+      headers:{"Content-Type":"application/json","Prefer":"resolution=merge-duplicates,return=minimal"},
+      body:JSON.stringify({key:k,value:v,updated_at:new Date().toISOString()})});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    $("storBanner").style.display="none";
+    return true;
+  }catch(e){ lastErr=(e&&e.message)?e.message:String(e);
+    $("storBanner").textContent="クラウドに保存できませんでした: "+lastErr+" ／ ネット接続を確認して「今すぐ保存」を押し直してください。";
+    $("storBanner").style.display="block"; setStat("保存エラー",true); return false; }
+}
+async function stDel(k){
+  try{ await sbFetch("/rest/v1/kv?key=eq."+encodeURIComponent(k),{method:"DELETE"}); }catch(e){}
+}
+async function stList(pre){
+  try{
+    const r=await sbFetch("/rest/v1/kv?select=key&key=like."+encodeURIComponent(pre)+"*");
+    if(!r.ok) return [];
+    return (await r.json()).map(x=>x.key);
+  }catch(e){ return []; }
+}
+async function saveAllNow(){
+  if(loadFailed){ alert("読み込みに失敗した状態のため保存できません。「最新を再読込」を押してください。"); return; }
+  clearTimeout(tmDay); clearTimeout(tmMst); clearTimeout(tmMem);
+  const a=await stSet("kotei-day:"+curDate,day);
+  const b=await stSet("kotei-master",master);
+  const c=await stSet("kotei-members",members);
+  if(a&&b&&c){ setStat("保存済み "+new Date().toTimeString().slice(0,5)); refreshSaved();
+    alert("保存できました("+curDate+")\n保存先: クラウド(どのPC・スマホでも共有)");
+  } else { alert("保存できませんでした。\n理由: "+lastErr+"\n\n「バックアップ保存」でファイルに残すことができます。"); }
+}
+let tmDay=null,tmMst=null,tmMem=null;
+function setStat(t,err){ const s=$("saveStat"); s.textContent=t; s.className="savestat"+(err?" err":""); }
+function schedDay(){ if(loadFailed){ setStat("読込失敗のため保存停止中",true); return; }
+  setStat("変更あり…"); clearTimeout(tmDay); tmDay=setTimeout(async()=>{
+  if(await stSet("kotei-day:"+curDate,day)){ setStat("保存済み "+new Date().toTimeString().slice(0,5)); refreshSaved(); } },700); }
+function schedMst(){ setStat("変更あり…"); clearTimeout(tmMst); tmMst=setTimeout(async()=>{
+  if(await stSet("kotei-master",master)) setStat("保存済み "+new Date().toTimeString().slice(0,5)); },700); }
+function schedMem(){ setStat("変更あり…"); clearTimeout(tmMem); tmMem=setTimeout(async()=>{
+  if(await stSet("kotei-members",members)) setStat("保存済み "+new Date().toTimeString().slice(0,5)); },700); }
+let tmRul=null;
+function schedRul(){ setStat("変更あり…"); clearTimeout(tmRul); tmRul=setTimeout(async()=>{
+  if(await stSet("kotei-rules",rules)) setStat("保存済み "+new Date().toTimeString().slice(0,5)); },700); }
+
+/* ================= time helpers ================= */
+function pT(s){ if(s==null) return null; s=String(s).trim().replace(/：/g,":").replace(/；/g,":");
+  let m=s.match(/^(\d{1,2}):(\d{1,2})$/); if(m) return +m[1]*60 + +m[2];
+  m=s.match(/^(\d{1,2})(\d{2})$/); if(m) return +m[1]*60 + +m[2]; return null; }
+function fT(min){ if(min==null) return ""; min=((min%1440)+1440)%1440; return Math.floor(min/60)+":"+String(min%60).padStart(2,"0"); }
+function fSec(sec){ return Math.floor(sec/60)+":"+String(sec%60).padStart(2,"0"); }
+
+/* row is active (participates in chain) */
+function isActive(r){ return r.type==="item" && !!(String(r.name).trim()||String(r.code).trim()||String(r.qty).trim()); }
+function manMin(r){ const s=String(r.min??"").trim(); if(s==="") return null;
+  const v=parseInt(s,10); return (isFinite(v)&&v>0)?v:null; }
+function rowDur(r){ // returns {tot: 正確な秒数|null, r5: チェーンで使う分}
+  if(!isActive(r)) return {tot:null,r5:null};
+  const q=parseFloat(r.qty), s=parseFloat(r.sec);
+  let tot=null;
+  if(isFinite(q)&&isFinite(s)&&(String(r.qty).trim()!=="")&&(String(r.sec).trim()!=="")) tot=Math.round(q*s)+SETUP_SEC;
+  const mm=manMin(r);
+  if(mm!=null) return {tot,r5:mm};
+  if(tot!=null) return {tot,r5:Math.ceil(tot/300)*5};
+  return {tot:null,r5:5}; // 段取りのみ
+}
+/* compute chain: bottom -> top (ブロックごとに独立。並行行はチェーンに入れない) */
+function computeBlock(rows){
+  const N=rows.length;
+  const out=Array(N).fill(null).map(()=>({start:null,end:null,tot:null,r5:null,auto:false}));
+  let carry=null;
+  for(let i=N-1;i>=0;i--){ const r=rows[i]; if(!isActive(r)) continue;
+    const d=rowDur(r);
+    const ms=r.startMan? pT(r.start):null, me=r.endMan? pT(r.end):null;
+    if(r.par){ // 並行作業: 手入力の開始/終了だけで完結
+      let start=ms, end=me;
+      if(start==null&&end!=null&&d.r5!=null) start=end-d.r5;
+      if(end==null&&start!=null&&d.r5!=null) end=start+d.r5;
+      out[i]={start,end,tot:d.tot,r5:d.r5,auto:false};
+      continue;
+    }
+    let end= me!=null? me : carry;
+    const auto= me==null&&carry!=null;
+    let start=null;
+    if(ms!=null) start=ms;
+    else if(end!=null&&d.r5!=null) start=end-d.r5;
+    if(end==null&&start!=null&&d.r5!=null) end=start+d.r5;
+    if(start!=null) carry=start;
+    out[i]={start,end,tot:d.tot,r5:d.r5,auto};
+  }
+  return out;
+}
+function computeAll(){
+  const blocks=day.blocks.map(b=>computeBlock(b.rows));
+  let earliest=null;
+  blocks.forEach(res=>res.forEach(o=>{ if(o.start!=null&&(earliest==null||o.start<earliest)) earliest=o.start; }));
+  return {blocks, morning: earliest!=null? earliest-5 : null};
+}
+
+/* ================= master lookup ================= */
+function findByCode(c){ c=String(c).trim(); if(!c) return null; return master.find(m=>String(m.code).trim()===c)||null; }
+function findByName(n){ n=String(n).trim(); if(!n) return null; return master.find(m=>String(m.name).trim()===n)||null; }
+function rebuildDatalists(){
+  $("dlCode").innerHTML = master.map(m=>`<option value="${esc(m.code)}">${esc((m.sym?m.sym+" ":"")+m.name)}</option>`).join("");
+  $("dlName").innerHTML = master.map(m=>`<option value="${esc(m.name)}">${esc(m.code+(m.sym?" "+m.sym:""))}</option>`).join("");
+}
+function esc(s){ return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;"); }
+
+/* ================= blocks / main tables ================= */
+const OPS_BTNS = `<button class="mini" data-f="ins" title="この行の上に1行挿入">挿</button><button class="mini" data-f="up" title="上へ">▲</button><button class="mini" data-f="dn" title="下へ">▼</button><button class="mini" data-f="memo" title="メモ行 ⇔ 商品行 切替">メ</button><button class="mini" data-f="par" title="並行作業 ⇔ 通常(時間の流れに入れない行。開始か終了を手入力)">並</button><button class="mini asgr" data-f="asgrst" title="担当を上の行と同じ並びに戻す">担</button><button class="mini" data-f="clr" title="行をクリア(行は残す)">✕</button><button class="mini" data-f="rowdel" title="この行を削除して下を詰める">削</button>`;
+
+function rowHtml(b,i,r){
+  if(r.type==="memo"){
+    return `<tr data-b="${b}" data-i="${i}" class="memoRow">
+      <td class="rownum" draggable="true" title="ドラッグで行を移動">${i+1}</td><td class="tm"></td><td class="tm"></td>
+      <td colspan="${10+NASG}" class="memoTd"><input data-f="name" placeholder="メモ・指示(時間計算には入りません。印刷では横長の太字で出ます)"></td>
+      <td class="ops2">${OPS_BTNS}</td></tr>`;
+  }
+  let h=`<tr data-b="${b}" data-i="${i}">
+    <td class="rownum" draggable="true" title="ドラッグで行を移動">${i+1}</td>
+    <td class="tm"><div class="endcell" data-f="startW">
+      <input data-f="start" placeholder="" inputmode="numeric"><button class="rst" data-f="srst" title="自動計算に戻す">戻</button></div></td>
+    <td class="tm"><div class="endcell" data-f="endW">
+      <input data-f="end" placeholder="" inputmode="numeric"><button class="rst" data-f="rst" title="自動計算に戻す">戻</button></div></td>
+    <td class="num" style="width:52px"><input data-f="code" list="dlCode"></td>
+    <td class="sym" data-f="symC"></td>
+    <td class="name"><input data-f="name" list="dlName"></td>
+    <td class="num"><input data-f="qty" inputmode="numeric"></td>
+    <td class="num"><input data-f="ken" inputmode="numeric"></td>
+    <td class="num"><input data-f="sec" inputmode="numeric"></td>
+    <td class="calc" data-f="totC"></td>
+    <td class="num" style="width:46px"><input data-f="min" inputmode="numeric" title="空欄=自動計算。分を直接入力もできます"></td>
+    <td class="rice"><input data-f="rice" list="dlRice"></td>
+    <td class="num"><input data-f="ppl" inputmode="numeric"></td>`;
+  for(let a=0;a<NASG;a++){
+    h+=`<td class="asg"><span class="agrip" draggable="true" data-a="${a}" title="ドラッグで担当を入替">⠿</span><select data-f="asg" data-a="${a}"></select>${a<NASG-1?`<button class="swap" data-f="swap" data-a="${a}" title="右と入れ替え">⇄</button>`:""}</td>`;
+  }
+  h+=`<td class="note"><input data-f="note"></td>
+    <td class="ops2">${OPS_BTNS}</td></tr>`;
+  return h;
+}
+function tableHtml(b){
+  let h=`<tr><th></th><th>予定<br>開始</th><th>予定<br>終了</th><th>番号</th><th>記号</th><th>商品名</th>
+    <th>食数</th><th>検食</th><th>1個当<br>(秒)</th><th>合計<br>所要</th><th>切上分<br>(入力可)</th><th>ご飯</th><th>標準<br>人数</th>`;
+  for(let a=0;a<NASG;a++) h+=`<th>${a===0?"先頭":"盛付"+"①②③④⑤⑥"[a]}</th>`;
+  h+=`<th>備考</th><th class="opsh">操作</th></tr>`;
+  day.blocks[b].rows.forEach((r,i)=>{ h+=rowHtml(b,i,r); });
+  return h;
+}
+function buildBlocks(){
+  const C=$("blocks");
+  let h="";
+  day.blocks.forEach((blk,b)=>{
+    h+=`<div class="blockbox">
+      <div class="blkhd">`+
+      (b===0
+        ? `<span class="blkname">① 盛付ライン</span>`
+        : `<span class="blkname">②</span><input class="blktitle" data-bb="${b}" data-bf="title" value="${esc(blk.title)}" placeholder="ブロック名(例: 厨房さん)">`)+
+      `<button class="btn" data-bb="${b}" data-bf="addrow">＋ 行を追加</button>
+       <button class="btn" data-bb="${b}" data-bf="delrow">− 末尾を削除</button>`+
+      (b>0?`<button class="btn warn" data-bb="${b}" data-bf="delblk">✕ このブロックを削除</button>`:"")+
+      `</div>
+      <div class="tblwrap"><table class="main" id="mainT_${b}">${tableHtml(b)}</table></div>
+    </div>`;
+  });
+  C.innerHTML=h;
+  $("btnBlk2").style.display = day.blocks.length<2 ? "" : "none";
+}
+function q(tr,f,a){ return a==null? tr.querySelector(`[data-f="${f}"]`) : tr.querySelector(`[data-f="${f}"][data-a="${a}"]`); }
+function eachTr(fn){
+  $("blocks").querySelectorAll("tr[data-i]").forEach(tr=>{
+    const b=+tr.dataset.b, i=+tr.dataset.i;
+    fn(tr,b,i,day.blocks[b].rows[i]);
+  });
+}
+function fillAll(){
+  eachTr((tr,b,i,r)=>{
+    if(r.type==="memo"){ q(tr,"name").value=r.name; return; }
+    q(tr,"start").value=r.start; q(tr,"end").value=r.end; q(tr,"code").value=r.code; q(tr,"name").value=r.name;
+    q(tr,"qty").value=r.qty; q(tr,"ken").value=r.ken; q(tr,"sec").value=r.sec;
+    q(tr,"min").value=r.min; q(tr,"rice").value=r.rice;
+    q(tr,"ppl").value=r.ppl; q(tr,"note").value=r.note; q(tr,"symC").textContent=r.sym;
+    for(let a=0;a<NASG;a++) fillAsgSelect(q(tr,"asg",a), r.asg[a]);
+  });
+  recalc();
+}
+function attNames(){ return day.att.map(a=>a.name).filter(Boolean); }
+function fillAsgSelect(sel,val){
+  const names=attNames().concat(members.filter(m=>!attNames().includes(m)));
+  let h=`<option value=""></option>`;
+  const list=[...names]; if(val&&!list.includes(val)) list.push(val);
+  list.forEach(n=>h+=`<option value="${esc(n)}">${esc(n)}</option>`);
+  sel.innerHTML=h; sel.value=val||"";
+}
+function hasProduct(r){ return r.type==="item" && !!(String(r.name).trim()||String(r.code).trim()); }
+function baseAsg(b){ // ブロック①はシフト表の盛付枠(左から)。ブロック②は空(手動)
+  if(b>0) return Array(NASG).fill("");
+  const names=day.att.filter(a=>!a.fixed&&a.pour!==false&&a.name).map(a=>a.name).slice(0,4); // 盛付枠の先頭4人
+  while(names.length<NASG) names.push("");
+  return names;
+}
+function cascadeAsg(b){
+  let cur=baseAsg(b);
+  const rows=day.blocks[b].rows;
+  for(let i=0;i<rows.length;i++){ const r=rows[i];
+    if(!hasProduct(r)) continue;
+    if(r.par) continue; // 並行行は自動割当も下への引き継ぎもしない
+    if(r.asgMan){ cur=[...r.asg]; while(cur.length<NASG) cur.push(""); }
+    else{ r.asg=[...cur]; }
+  }
+}
+function refreshAsgOptions(){ // disable duplicates within a row
+  eachTr((tr,b,i,r)=>{
+    if(r.type==="memo") return;
+    const used=r.asg;
+    for(let a=0;a<NASG;a++){ const sel=q(tr,"asg",a);
+      [...sel.options].forEach(op=>{ op.disabled = op.value!=="" && op.value!==used[a] && used.includes(op.value); });
+    }
+  });
+}
+function recalc(){
+  day.blocks.forEach((_,b)=>cascadeAsg(b));
+  const res=computeAll();
+  eachTr((tr,b,i,r)=>{
+    if(r.type==="memo") return;
+    const o=res.blocks[b][i];
+    const stIn=q(tr,"start"), swrap=q(tr,"startW");
+    if(document.activeElement!==stIn){ stIn.value = r.startMan? r.start : (o.start!=null? fT(o.start):""); }
+    stIn.classList.toggle("man",!!r.startMan);
+    swrap.classList.toggle("isman",!!r.startMan);
+    tr.classList.toggle("parRow",!!r.par);
+    const endIn=q(tr,"end"), wrap=q(tr,"endW");
+    if(document.activeElement!==endIn){ endIn.value = r.endMan? r.end : (o.end!=null? fT(o.end):""); }
+    endIn.classList.toggle("man",!!r.endMan);
+    wrap.classList.toggle("isman",!!r.endMan);
+    q(tr,"totC").textContent = o.tot!=null? fSec(o.tot):"";
+    const minIn=q(tr,"min");
+    minIn.placeholder = (o.r5!=null&&isActive(r)&&manMin(r)==null)? o.r5+"分":"";
+    minIn.classList.toggle("man",manMin(r)!=null);
+    tr.classList.toggle("manrow",!!r.asgMan);
+    for(let a=0;a<NASG;a++){ const sel=q(tr,"asg",a), v=r.asg[a]||"";
+      if(sel.value!==v){ sel.value=v; if(sel.value!==v){ fillAsgSelect(sel,v); } } }
+  });
+  $("mornChip").textContent = res.morning!=null? fT(res.morning) : "--:--";
+  updateAttTimes(res.morning);
+  refreshAsgOptions();
+}
+function bindBlocks(){
+  const C=$("blocks");
+  C.addEventListener("focusin",e=>{
+    const f=e.target.dataset&&e.target.dataset.f;
+    if(e.target.tagName!=="INPUT") return;
+    const tr=e.target.closest("tr[data-i]");
+    if(tr&&tr.classList.contains("memoRow")) return;
+    if(f==="code"||f==="name"){
+      // 一時的に空にして候補一覧を全部表示(何もせず離れたら元に戻す)
+      e.target.dataset.prev=e.target.value; e.target.value="";
+    } else if(["qty","ken","sec","ppl","end","note","rice","min"].includes(f)) e.target.select();
+  });
+  C.addEventListener("focusout",e=>{
+    const f=e.target.dataset&&e.target.dataset.f;
+    const tr=e.target.closest("tr[data-i]");
+    if(tr&&tr.classList.contains("memoRow")) return;
+    if((f==="code"||f==="name")&&e.target.value.trim()===""){
+      if(tr){ const r=day.blocks[+tr.dataset.b].rows[+tr.dataset.i]; e.target.value=r[f]||""; }
+    }
+    if(f==="code"||f==="name") delete e.target.dataset.prev;
+  });
+  /* 行のドラッグ移動(同じブロック内) と 担当名のドラッグ入替(同じ行内) */
+  let rowDrag=null, asgDrag=null, dropEl=null;
+  const clearDrop=()=>{ if(dropEl){ dropEl.classList.remove("dropTgt"); dropEl.classList.remove("dropTgtA"); dropEl=null; } };
+  C.addEventListener("dragstart",e=>{
+    const ag=e.target.closest? e.target.closest(".agrip"):null;
+    if(ag){
+      const tr=ag.closest("tr[data-i]");
+      asgDrag={b:+tr.dataset.b,i:+tr.dataset.i,a:+ag.dataset.a};
+      e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("text/plain","asg");
+      return;
+    }
+    const h=e.target.closest? e.target.closest("td.rownum"):null;
+    if(!h){ e.preventDefault(); return; }
+    const tr=h.closest("tr[data-i]");
+    rowDrag={b:+tr.dataset.b,i:+tr.dataset.i};
+    e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("text/plain","row");
+  });
+  C.addEventListener("dragover",e=>{
+    if(asgDrag){
+      const td=e.target.closest("td.asg"), tr=e.target.closest("tr[data-i]");
+      if(!td||!tr||+tr.dataset.b!==asgDrag.b||+tr.dataset.i!==asgDrag.i) return;
+      e.preventDefault();
+      if(dropEl!==td){ clearDrop(); dropEl=td; td.classList.add("dropTgtA"); }
+      return;
+    }
+    if(!rowDrag) return;
+    const tr=e.target.closest("tr[data-i]");
+    if(!tr||+tr.dataset.b!==rowDrag.b) return;
+    e.preventDefault();
+    if(dropEl!==tr){ clearDrop(); dropEl=tr; tr.classList.add("dropTgt"); }
+  });
+  C.addEventListener("drop",e=>{
+    if(asgDrag){
+      const td=e.target.closest("td.asg"), tr=e.target.closest("tr[data-i]");
+      if(!td||!tr||+tr.dataset.b!==asgDrag.b||+tr.dataset.i!==asgDrag.i) return;
+      e.preventDefault();
+      const sel=td.querySelector('select[data-f="asg"]'); if(!sel) return;
+      const to=+sel.dataset.a, r=day.blocks[asgDrag.b].rows[asgDrag.i];
+      if(to!==asgDrag.a){
+        r.asgMan=true;
+        [r.asg[asgDrag.a],r.asg[to]]=[r.asg[to],r.asg[asgDrag.a]];
+        recalc(); schedDay();
+      }
+      asgDrag=null; clearDrop(); return;
+    }
+    if(!rowDrag) return;
+    const tr=e.target.closest("tr[data-i]");
+    if(!tr||+tr.dataset.b!==rowDrag.b) return;
+    e.preventDefault();
+    const rows=day.blocks[rowDrag.b].rows, to=+tr.dataset.i;
+    const [mv]=rows.splice(rowDrag.i,1); rows.splice(to,0,mv);
+    rowDrag=null; clearDrop(); rebuild(); schedDay();
+  });
+  C.addEventListener("dragend",()=>{ rowDrag=null; asgDrag=null; clearDrop(); });
+  C.addEventListener("input",onMainInput);
+  C.addEventListener("change",onMainChange);
+  C.addEventListener("click",onMainClick);
+  C.addEventListener("keydown",e=>{
+    // Delete/Backspaceで担当を空欄に
+    if((e.key==="Delete"||e.key==="Backspace")&&e.target.tagName==="SELECT"&&e.target.dataset.f==="asg"){
+      e.preventDefault();
+      const tr=e.target.closest("tr[data-i]"); if(!tr) return;
+      const r=day.blocks[+tr.dataset.b].rows[+tr.dataset.i];
+      r.asgMan=true; r.asg[+e.target.dataset.a]=""; recalc(); schedDay(); return;
+    }
+    // Enterで下の行の同じ欄へ
+    if(e.key==="Enter"&&e.target.tagName==="INPUT"){
+      e.preventDefault();
+      const f=e.target.dataset.f, tr=e.target.closest("tr[data-i]");
+      e.target.blur();
+      if(!f||!tr) return;
+      const nxt=document.querySelector(`#mainT_${tr.dataset.b} tr[data-i="${+tr.dataset.i+1}"] [data-f="${f}"]`);
+      if(nxt&&nxt.tagName==="INPUT") nxt.focus();
+    }
+  });
+}
+function onMainInput(e){
+  const bf=e.target.dataset&&e.target.dataset.bf;
+  if(bf==="title"){ day.blocks[+e.target.dataset.bb].title=e.target.value; schedDay(); return; }
+  const tr=e.target.closest("tr[data-i]"); if(!tr) return;
+  const b=+tr.dataset.b, i=+tr.dataset.i, r=day.blocks[b].rows[i], f=e.target.dataset.f;
+  if(r.type==="memo"){ if(f==="name"){ r.name=e.target.value; schedDay(); } return; }
+  if(["qty","ken","sec","note","rice"].includes(f)){ r[f]=e.target.value; if(f==="qty"||f==="sec") recalc(); schedDay(); }
+  else if(f==="min"){ r.min=e.target.value; recalc(); schedDay(); }
+  else if(f==="end"){ r.end=e.target.value; r.endMan = e.target.value.trim()!==""; recalc(); schedDay(); }
+  else if(f==="start"){ r.start=e.target.value; r.startMan = e.target.value.trim()!==""; recalc(); schedDay(); }
+  else if(f==="code"){ r.code=e.target.value;
+    const m=findByCode(e.target.value); if(m) applyMaster(tr,r,m);
+    recalc(); schedDay(); }
+  else if(f==="name"){ r.name=e.target.value; recalc(); schedDay(); }
+}
+function onMainChange(e){
+  const tr=e.target.closest("tr[data-i]"); if(!tr) return;
+  const b=+tr.dataset.b, i=+tr.dataset.i, r=day.blocks[b].rows[i], f=e.target.dataset.f;
+  if(r.type==="memo") return;
+  if(f==="code"){ const m=findByCode(e.target.value); if(m) applyMaster(tr,r,m); recalc(); schedDay(); }
+  else if(f==="name"){ const m=findByName(e.target.value); if(m) applyMaster(tr,r,m); recalc(); schedDay(); }
+  else if(f==="ppl"){ r.ppl=e.target.value; schedDay(); }
+  else if(f==="asg"){ const a=+e.target.dataset.a; r.asgMan=true; r.asg[a]=e.target.value; recalc(); schedDay(); }
+  else if(f==="end"){ // normalize on blur
+    if(r.endMan){ const m=pT(r.end); if(m!=null){ r.end=fT(m); } }
+    recalc(); schedDay(); }
+  else if(f==="start"){
+    if(r.startMan){ const m=pT(r.start); if(m!=null){ r.start=fT(m); } }
+    recalc(); schedDay(); }
+}
+function applyMaster(tr,r,m){
+  r.code=String(m.code); r.sym=m.sym||""; r.name=m.name;
+  r.sec=(m.sec===""||m.sec==null)?"":String(m.sec);
+  r.rice=m.rice||"白"; r.ppl=(m.ppl===""||m.ppl==null)?"":String(m.ppl);
+  q(tr,"code").value=r.code; q(tr,"name").value=r.name; q(tr,"symC").textContent=r.sym;
+  q(tr,"sec").value=r.sec; q(tr,"rice").value=r.rice; q(tr,"ppl").value=r.ppl;
+}
+function rebuild(){ buildBlocks(); fillAll(); }
+function onMainClick(e){
+  const btn=e.target.closest("button"); if(!btn) return;
+  const bf=btn.dataset.bf;
+  if(bf){ // block header buttons
+    const b=+btn.dataset.bb, blk=day.blocks[b];
+    if(bf==="addrow"){
+      if(totalRows()>=MAX_ROWS&&!confirm("全体で"+MAX_ROWS+"行を超えます。印刷が3枚以上になることがあります。追加しますか?")) return;
+      blk.rows.push(blankRow()); rebuild(); schedDay();
+      setStat("現在 合計"+totalRows()+"行(印刷は20行ごとに改ページ)");
+    }
+    else if(bf==="delrow"){
+      const minR=b===0?BASE_ROWS:1;
+      if(blk.rows.length<=minR){ alert(b===0?"基本の20行より少なくはできません。":"これ以上減らせません。"); return; }
+      const r=blk.rows[blk.rows.length-1];
+      if(isActive(r)||String(r.note).trim()||(r.type==="memo"&&String(r.name).trim())){ if(!confirm("末尾の行に入力があります。削除しますか?")) return; }
+      blk.rows.pop(); rebuild(); schedDay();
+    }
+    else if(bf==="delblk"){
+      if(!confirm("第2ブロックを削除しますか?(中の行も消えます)")) return;
+      day.blocks.splice(b,1); rebuild(); schedDay();
+    }
+    return;
+  }
+  const tr=btn.closest("tr[data-i]"); if(!tr) return;
+  const b=+tr.dataset.b, i=+tr.dataset.i, rows=day.blocks[b].rows, f=btn.dataset.f;
+  if(f==="rst"){ rows[i].endMan=false; rows[i].end=""; recalc(); schedDay(); }
+  else if(f==="srst"){ rows[i].startMan=false; rows[i].start=""; recalc(); schedDay(); }
+  else if(f==="par"){ rows[i].par=!rows[i].par; recalc(); schedDay(); }
+  else if(f==="asgrst"){ rows[i].asgMan=false; recalc(); schedDay(); }
+  else if(f==="swap"){ const a=+btn.dataset.a, r=rows[i];
+    r.asgMan=true;
+    [r.asg[a],r.asg[a+1]]=[r.asg[a+1],r.asg[a]];
+    recalc(); schedDay(); }
+  else if(f==="memo"){ const r=rows[i];
+    if(r.type==="memo"){ r.type="item"; }
+    else{
+      if((String(r.code).trim()||String(r.qty).trim())&&!confirm("この行をメモ行にすると、番号・食数などは印刷されなくなります(データは残ります)。よろしいですか?")) return;
+      r.type="memo";
+    }
+    rebuild(); schedDay(); }
+  else if(f==="ins"){
+    if(totalRows()>=MAX_ROWS&&!confirm("全体で"+MAX_ROWS+"行を超えます。追加しますか?")) return;
+    rows.splice(i,0,blankRow()); rebuild(); schedDay(); }
+  else if(f==="clr"){ if(confirm((i+1)+"行目をクリアしますか?(行は残ります)")){ rows[i]=blankRow(); rebuild(); schedDay(); } }
+  else if(f==="rowdel"){ if(confirm((i+1)+"行目を削除して、下の行を詰めますか?")){
+    rows.splice(i,1);
+    const minR=b===0?BASE_ROWS:1;
+    while(rows.length<minR) rows.push(blankRow());
+    rebuild(); schedDay(); } }
+  else if(f==="up"&&i>0){ [rows[i-1],rows[i]]=[rows[i],rows[i-1]]; rebuild(); schedDay(); }
+  else if(f==="dn"&&i<rows.length-1){ [rows[i+1],rows[i]]=[rows[i],rows[i+1]]; rebuild(); schedDay(); }
+}
+
+/* ================= attendance ================= */
+const FIXED_ROLES=["調理","米","唐揚","仕込"];
+function ensureAtt(){
+  if(!Array.isArray(day.att)) day.att=[];
+  if(!day.att.some(a=>a&&a.fixed===true)){
+    const old=day.att, na=[];
+    for(let i=0;i<4;i++){ const o=old[i]||{};
+      na.push({name:o.name||"",r1:o.r1||FIXED_ROLES[i],r2:o.r2||"",time:o.time||"",fixed:true}); }
+    for(let i=4;i<old.length;i++){ const o=old[i];
+      na.push({name:o.name||"",r1:o.r1||"盛付",r2:o.r2||"",time:o.time||"",fixed:false}); }
+    day.att=na;
+  }else{
+    for(let i=0;i<4;i++){ if(!day.att[i]||!day.att[i].fixed)
+      day.att.splice(i,0,{name:"",r1:FIXED_ROLES[i],r2:"",time:"",fixed:true}); }
+  }
+  while(day.att.filter(a=>!a.fixed).length<4)
+    day.att.push({name:"",r1:"盛付",r2:"",time:"",fixed:false});
+  day.att.forEach(a=>{ if(a.timeMan===undefined) a.timeMan=!!String(a.time||"").trim();
+    if(!a.fixed&&a.pour===undefined) a.pour=true; });
+}
+/* 出勤時間の自動計算 */
+function ruleTime(rule,morn){
+  rule=String(rule??"").trim();
+  if(!rule) return null;
+  if(rule==="0"||rule==="朝礼") return morn;
+  const m=rule.match(/^-(\d+)$/); if(m) return morn!=null? morn-+m[1] : null;
+  return pT(rule); // "7:00"など固定
+}
+function autoTime(a,morn){
+  let rule=null;
+  if(a.fixed){ rule=ROLE_RULES[String(a.r1).trim()]; if(rule==null||rule==="") rule=rules[a.name]||null; }
+  else rule=rules[a.name]||null;
+  return ruleTime(rule,morn);
+}
+function updateAttTimes(morn){
+  document.querySelectorAll('#attT input[data-af="time"]').forEach(inp=>{
+    const a=day.att[+inp.dataset.ai]; if(!a) return;
+    if(!a.timeMan){
+      const t=autoTime(a,morn);
+      a.time = t!=null? fT(t):"";
+      if(document.activeElement!==inp) inp.value=a.time;
+    }
+    inp.classList.toggle("man",!!a.timeMan);
+  });
+}
+function renderAtt(){
+  ensureAtt();
+  const T=$("attT");
+  const used=day.att.map(a=>a.name).filter(Boolean);
+  let r1=`<tr><th>役割(上)</th>`,r2=`<tr><th>役割(下)</th>`,r3=`<tr><th>出勤時間</th>`,r4=`<tr><th>名前</th>`,r5=`<tr><th></th>`;
+  day.att.forEach((a,ix)=>{
+    const oth=!a.fixed&&a.pour===false;
+    const cls=a.fixed?` class="fx"`:(oth?` class="oth"`:``);
+    r1+=`<td${cls} data-ci="${ix}"><input data-ai="${ix}" data-af="r1" list="dlRole" value="${esc(a.r1)}"${oth?' placeholder="役割"':''}></td>`;
+    r2+=`<td${cls} data-ci="${ix}"><input data-ai="${ix}" data-af="r2" list="dlRole" value="${esc(a.r2)}"></td>`;
+    r3+=`<td${cls} data-ci="${ix}"><input class="tm${a.timeMan?" man":""}" data-ai="${ix}" data-af="time" value="${esc(a.time)}" placeholder="自動/手入力"></td>`;
+    const opts=[...members]; if(a.name&&!opts.includes(a.name)) opts.push(a.name);
+    r4+=`<td class="nm${oth?" oth":""}" data-ci="${ix}"><select data-ai="${ix}" data-af="name"><option value="">(空欄)</option>`+
+        opts.map(n=>`<option value="${esc(n)}"${n===a.name?" selected":""}${(n!==a.name&&used.includes(n))?" disabled":""}>${esc(n)}</option>`).join("")+
+        `</select></td>`;
+    if(a.fixed){ r5+=`<td class="ops" data-ci="${ix}"></td>`; }
+    else{
+      r5+=`<td class="ops" data-ci="${ix}"><span class="grip" draggable="true" data-gi="${ix}" title="ドラッグで枠を移動">⠿</span>`+
+          `${ix>4?`<button class="mini" data-ai="${ix}" data-af="left" title="左へ">◀</button>`:""}`+
+          `${ix<day.att.length-1?`<button class="mini" data-ai="${ix}" data-af="right" title="右へ">▶</button>`:""}`+
+          `<button class="mini" data-ai="${ix}" data-af="kind" title="盛付枠 ⇔ その他枠 切替(「盛」=自動割当に数える)">${oth?"他":"盛"}</button>`+
+          `<button class="mini" data-ai="${ix}" data-af="del" title="枠を削除">✕</button></td>`;
+    }
+  });
+  T.innerHTML=r1+"</tr>"+r2+"</tr>"+r3+"</tr>"+r4+"</tr>"+r5+"</tr>";
+}
+function attInput(e){
+  const ix=e.target.dataset.ai, f=e.target.dataset.af;
+  if(ix==null||!f) return;
+  const a=day.att[+ix]; if(!a) return;
+  if(f==="r1"||f==="r2"){ a[f]=e.target.value; if(f==="r1"&&a.fixed) recalc(); schedDay(); }
+  else if(f==="time"){ a.time=e.target.value; a.timeMan=e.target.value.trim()!==""; e.target.classList.toggle("man",a.timeMan); schedDay(); }
+}
+function attChange(e){
+  const ix=e.target.dataset.ai, f=e.target.dataset.af;
+  if(ix==null||!f) return;
+  const a=day.att[+ix]; if(!a) return;
+  if(f==="name"){ a.name=e.target.value; renderAtt(); fillAll(); schedDay(); }
+  else if(f==="time"){ if(a.timeMan){ const m=pT(a.time); if(m!=null){ a.time=fT(m); e.target.value=a.time; } } recalc(); schedDay(); }
+}
+function attClick(e){
+  const b=e.target.closest("button"); if(!b||b.dataset.af==null) return;
+  const ix=+b.dataset.ai, f=b.dataset.af, arr=day.att;
+  if(!arr[ix]||arr[ix].fixed) return;
+  if(f==="del"){ arr.splice(ix,1); }
+  else if(f==="kind"){ arr[ix].pour = arr[ix].pour===false; }
+  else if(f==="left"&&ix>4){ [arr[ix-1],arr[ix]]=[arr[ix],arr[ix-1]]; }
+  else if(f==="right"&&ix<arr.length-1&&!arr[ix+1].fixed){ [arr[ix+1],arr[ix]]=[arr[ix],arr[ix+1]]; }
+  else return;
+  renderAtt(); fillAll(); schedDay();
+}
+/* ================= day load/save ================= */
+async function loadDay(d,{silent}={}){
+  curDate=d; $("dateSel").value=d;
+  let got=null; loadFailed=false;
+  try{ got=await stGet("kotei-day:"+d); }
+  catch(e){ loadFailed=true; }
+  if(loadFailed){
+    day=blankDay(); ensureAtt(); renderAtt(); rebuild();
+    setStat("読込失敗(保存停止中)",true);
+    $("storBanner").textContent="クラウドから読み込めませんでした。上書き事故を防ぐため自動保存を止めています。ネット接続を確認して「最新を再読込」を押してください。";
+    $("storBanner").style.display="block";
+    return;
+  }
+  day=normDay(got);
+  ensureAtt();
+  renderAtt(); rebuild();
+  $("storBanner").style.display="none";
+  if(!silent) setStat(got?"読み込みました":"新規の日付です");
+}
+async function refreshSaved(){
+  const keys=await stList("kotei-day:");
+  const ds=keys.map(k=>k.replace("kotei-day:","")).sort().reverse();
+  $("savedSel").innerHTML=`<option value="">保存済み一覧…</option>`+ds.map(d=>`<option value="${d}"${d===curDate?" selected":""}>${d}${d===curDate?" (表示中)":""}</option>`).join("");
+}
+
+/* ================= templates(ひな形) ================= */
+async function refreshTpl(){
+  const keys=await stList("kotei-tpl:");
+  const names=keys.map(k=>k.replace("kotei-tpl:","")).sort();
+  $("tplSel").innerHTML=`<option value="">テンプレート一覧…</option>`+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("");
+}
+async function tplApply(){
+  const n=$("tplSel").value;
+  if(!n){ alert("流し込むひな形を選んでください。"); return; }
+  let tpl=null; try{ tpl=await stGet("kotei-tpl:"+n); }catch(e){ alert("クラウドから読み込めませんでした。ネット接続を確認してください。"); return; }
+  if(!tpl){ alert("ひな形が見つかりませんでした。"); return; }
+  const hasInput=day.blocks.some(b=>b.rows.some(r=>isActive(r)||String(r.note).trim()||(r.type==="memo"&&String(r.name).trim())));
+  if(hasInput&&!confirm(curDate+" には入力があります。ひな形「"+n+"」の内容で置き換えますか?")) return;
+  day=normDay(deepCopy(tpl));
+  ensureAtt(); renderAtt(); rebuild(); schedDay();
+  setStat("ひな形「"+n+"」を流し込みました");
+}
+async function tplSave(){
+  const [y,mo,dd]=curDate.split("-").map(Number);
+  const def="日月火水木金土"[new Date(y,mo-1,dd).getDay()];
+  const n=prompt("ひな形の名前を入力してください(例: 月、火、忙しい日 など)",def);
+  if(!n) return;
+  let exist=null; try{ exist=await stGet("kotei-tpl:"+n); }catch(e){}
+  if(exist&&!confirm("ひな形「"+n+"」は既にあります。上書きしますか?")) return;
+  if(await stSet("kotei-tpl:"+n,{att:day.att,blocks:day.blocks})){
+    await refreshTpl(); $("tplSel").value=n;
+    alert("ひな形「"+n+"」として登録しました。\n新しい日を作るときに「この日に流し込む」で使えます。");
+  }
+}
+async function tplDel(){
+  const n=$("tplSel").value;
+  if(!n){ alert("削除するひな形を選んでください。"); return; }
+  if(!confirm("ひな形「"+n+"」を削除しますか?")) return;
+  await stDel("kotei-tpl:"+n); await refreshTpl();
+}
+
+/* ================= master tab ================= */
+function renderMst(){
+  const f=$("mstFilter").value.trim();
+  const T=$("mstT");
+  let h=`<tr><th style="width:70px">商品番号</th><th style="width:70px">記号</th><th>商品名</th><th style="width:70px">秒数/個</th><th style="width:80px">ご飯</th><th style="width:70px">盛付人数</th><th style="width:50px"></th></tr>`;
+  master.forEach((m,ix)=>{
+    if(f&&!(String(m.code).includes(f)||String(m.sym).includes(f)||String(m.name).includes(f))) return;
+    h+=`<tr>
+      <td><input data-mi="${ix}" data-mf="code" value="${esc(m.code)}"></td>
+      <td><input data-mi="${ix}" data-mf="sym" value="${esc(m.sym)}"></td>
+      <td><input data-mi="${ix}" data-mf="name" value="${esc(m.name)}"></td>
+      <td><input data-mi="${ix}" data-mf="sec" value="${esc(m.sec)}" inputmode="numeric"></td>
+      <td><select data-mi="${ix}" data-mf="rice">${RICE_OPTS.map(o=>`<option value="${o}"${(m.rice||"")===o?" selected":""}>${o||"白"}</option>`).join("")}</select></td>
+      <td><input data-mi="${ix}" data-mf="ppl" value="${esc(m.ppl)}" inputmode="numeric"></td>
+      <td style="text-align:center"><button class="mini" data-mi="${ix}" data-mf="del">削除</button></td>
+    </tr>`;
+  });
+  T.innerHTML=h;
+}
+function mstInput(e){ const ix=e.target.dataset.mi, f=e.target.dataset.mf;
+  if(ix==null||!f||f==="del") return; master[+ix][f]=e.target.value; rebuildDatalists(); schedMst(); }
+function mstClick(e){ const b=e.target.closest("button"); if(!b||b.dataset.mf!=="del") return;
+  const ix=+b.dataset.mi; if(confirm(`「${master[ix].name}」を削除しますか?`)){ master.splice(ix,1); renderMst(); rebuildDatalists(); schedMst(); } }
+
+/* ================= members tab ================= */
+function renderMem(){
+  let h=`<tr><th>名前</th><th style="width:230px">出勤時間ルール</th><th style="width:56px"></th></tr>`;
+  members.forEach((m,ix)=>{
+    h+=`<tr><td style="padding:4px 8px;font-weight:700">${esc(m)}</td>
+      <td><input data-rx="${ix}" value="${esc(rules[m]||"")}" placeholder="例: -15 / 0 / 7:00"></td>
+      <td style="text-align:center"><button class="mini" data-x="${ix}">削除</button></td></tr>`;
+  });
+  $("memT").innerHTML=h;
+}
+
+/* ================= print ================= */
+function buildPrint(){
+  const res=computeAll();
+  const [y,mo,dd]=curDate.split("-").map(Number);
+  const yobi="日月火水木金土"[new Date(y,mo-1,dd).getDay()];
+  let att="";
+  if(day.att.length){
+    att=`<table class="patt"><tr>${day.att.map(a=>`<td>${esc(a.r1)||"&nbsp;"}</td>`).join("")}</tr>`+
+        `<tr>${day.att.map(a=>`<td>${esc(a.r2)||"&nbsp;"}</td>`).join("")}</tr>`+
+        `<tr>${day.att.map(a=>`<td class="mono">${esc(a.time)||"&nbsp;"}</td>`).join("")}</tr>`+
+        `<tr>${day.att.map(a=>`<td class="pnm">${esc(a.name)||"&nbsp;"}</td>`).join("")}</tr></table>`;
+  }
+  const w=["58","58","50","46","200","44","24","20","26","20","50","36","38","38","38","38","38","38",""];
+  const heads=["予定開始","予定終了","時間(実際)","記号","商品名","食数","検食","1個当","合計所要","5分切上","ご飯","人数","先頭","盛付②","盛付③","盛付④","盛付⑤","盛付⑥","備考"];
+  const NCOL=heads.length;
+  const nameSize=t=>{ const n=(t||"").length; return n<=24?16:n<=34?13:11; };
+  const noteSize=t=>{ const n=(t||"").length; return n<=54?10:n<=93?9:8; };
+  const usedRow=r=> r.type==="memo" ? !!String(r.name).trim() : (isActive(r)||!!String(r.note).trim());
+  // 印刷する行を1本のリストにする(ブロック2があれば見出し行を挟む)
+  const prows=[];
+  day.blocks.forEach((blk,bi)=>{
+    let last=-1;
+    blk.rows.forEach((r,i)=>{ if(usedRow(r)) last=i; });
+    if(bi>0){
+      if(last<0) return; // 空の第2ブロックは印刷しない
+      prows.push({t:"title",title:blk.title||"厨房さん"});
+    }
+    const upto = bi===0 ? Math.max(last, PER_PAGE-1 - 2) : last; // ブロック①は手書き用に最低18行分
+    for(let i=0;i<=upto&&i<blk.rows.length;i++) prows.push({t:"row",r:blk.rows[i],o:res.blocks[bi][i]||{start:null,end:null,tot:null,r5:null}});
+  });
+  while(prows.length<PER_PAGE) prows.push({t:"row",r:blankRow(),o:{start:null,end:null,tot:null,r5:null}});
+  const pages=Math.max(1,Math.ceil(prows.length/PER_PAGE));
+  let html="";
+  for(let pg=0;pg<pages;pg++){
+    let tbl=`<table class="pmain"><colgroup>${w.map(x=>`<col${x?` style="width:${x}pt"`:""}>`).join("")}</colgroup><tr>${heads.map(h=>`<th${["1個当","合計所要","5分切上"].includes(h)?' class="sm8h"':""}>${h}</th>`).join("")}</tr>`;
+    for(let k=0;k<PER_PAGE;k++){
+      const p=prows[pg*PER_PAGE+k];
+      if(!p){ break; }
+      if(p.t==="title"){
+        tbl+=`<tr><td class="pblkt" colspan="${NCOL}">■ ${esc(p.title)}</td></tr>`;
+        continue;
+      }
+      const r=p.r,o=p.o;
+      if(r.type==="memo"){
+        tbl+=`<tr><td></td><td></td><td></td><td class="pmemo" colspan="${NCOL-3}">${esc(r.name)}</td></tr>`;
+        continue;
+      }
+      const rice=r.rice===""&&isActive(r)&&(String(r.sec).trim()!=="")?"白":(r.rice||"");
+      const parLbl=r.par? "∥"+(o.start!=null?fT(o.start):"")+"→"+(o.end!=null?fT(o.end):"")+" " : "";
+      tbl+=`<tr${r.par?' class="ppar"':''}>
+        <td class="c mono big">${r.par?"":(o.start!=null?fT(o.start):(r.startMan?esc(r.start):""))}</td>
+        <td class="c mono big">${r.par?"":(o.end!=null?fT(o.end):(r.endMan?esc(r.end):""))}</td>
+        <td></td>
+        <td class="c mono big">${esc(r.sym)}</td>
+        <td class="pname" style="font-size:${nameSize(parLbl+r.name)}pt">${parLbl}${esc(r.name)}</td>
+        <td class="c mono big">${esc(r.qty)}</td><td class="c mono sm10">${esc(r.ken)}</td><td class="c mono sm8">${esc(r.sec)}</td>
+        <td class="c mono sm8">${o.tot!=null?fSec(o.tot):""}</td>
+        <td class="c mono sm8">${o.r5!=null&&isActive(r)?o.r5+"分":""}</td>
+        <td class="c big">${esc(rice)}</td><td class="c mono big">${esc(r.ppl)}</td>
+        ${r.asg.map(a=>`<td class="c pasg">${esc(a)}</td>`).join("")}
+        <td class="pnote" style="font-size:${noteSize(r.note)}pt">${esc(r.note)}</td></tr>`;
+    }
+    tbl+=`</table>`;
+    const head = pg===0
+      ? `<div class="phead"><div><h1>工程表</h1><div class="pdate">${y}年${mo}月${dd}日(${yobi})</div>
+         <div class="pmorn">盛付朝礼 <b>${res.morning!=null?fT(res.morning):"　:　"}</b></div></div>${att}</div>`
+      : `<div class="pcont">工程表(続き)　${y}年${mo}月${dd}日(${yobi})　${pg+1}/${pages}枚目</div>`;
+    html+=`<div class="ppage">${head}${tbl}</div>`;
+  }
+  $("printSheet").innerHTML=html;
+}
+/* ================= export / import ================= */
+/* 保存先フォルダの記憶(ブラウザ内) */
+function bkDb(fn){ return new Promise(res=>{
+  const rq=indexedDB.open("kotei-bk",1);
+  rq.onupgradeneeded=()=>rq.result.createObjectStore("h");
+  rq.onsuccess=()=>fn(rq.result,res);
+  rq.onerror=()=>res(null);
+}); }
+function bkGetDir(){ return bkDb((db,res)=>{
+  const g=db.transaction("h","readonly").objectStore("h").get("dir");
+  g.onsuccess=()=>res(g.result||null); g.onerror=()=>res(null);
+}); }
+function bkSetDir(h){ return bkDb((db,res)=>{
+  const tx=db.transaction("h","readwrite");
+  tx.objectStore("h").put(h,"dir"); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false);
+}); }
+async function collectBackup(){
+  const keys=await stList("kotei-day:");
+  const days={};
+  for(const k of keys){ let v=null; try{ v=await stGet(k); }catch(e){} if(v) days[k.replace("kotei-day:","")]=v; }
+  if(curDate&&day) days[curDate]=day;
+  const tkeys=await stList("kotei-tpl:");
+  const tpls={};
+  for(const k of tkeys){ let v=null; try{ v=await stGet(k); }catch(e){} if(v) tpls[k.replace("kotei-tpl:","")]=v; }
+  return {ver:2,exported:new Date().toISOString(),master,members,rules,days,tpls};
+}
+async function doExport(rePick){
+  const json=JSON.stringify(await collectBackup(),null,1);
+  const hm=new Date().toTimeString().slice(0,5).replace(":","");
+  const fname="工程表バックアップ_"+todayStr()+"_"+hm+".json";
+  if(window.showDirectoryPicker){
+    try{
+      let dir=rePick? null : await bkGetDir();
+      if(dir){
+        let p=await dir.queryPermission({mode:"readwrite"});
+        if(p!=="granted") p=await dir.requestPermission({mode:"readwrite"});
+        if(p!=="granted") dir=null;
+      }
+      if(!dir){
+        alert("バックアップの保存先フォルダを選んでください(OneDriveの「工程表」フォルダなど)。\n次回からは同じ場所に自動で保存されます。");
+        dir=await window.showDirectoryPicker({mode:"readwrite"});
+        await bkSetDir(dir);
+      }
+      const fh=await dir.getFileHandle(fname,{create:true});
+      const w=await fh.createWritable(); await w.write(json); await w.close();
+      setStat("バックアップ保存済み "+hm.slice(0,2)+":"+hm.slice(2));
+      alert("バックアップを保存しました。\nフォルダ: "+dir.name+"\nファイル: "+fname);
+      return;
+    }catch(e){
+      if(e&&e.name==="AbortError") return; // ユーザーがキャンセル
+      /* file://で開いているとブラウザの制限でフォルダ保存不可 → ダウンロードへ */
+      alert("この開き方(ファイルを直接開く方式)では、ブラウザの制限でフォルダへの直接保存ができません。\n代わりに通常のダウンロードで保存します(ふつうは「ダウンロード」フォルダに入ります)。\n\n毎回OneDriveの工程表フォルダに保存したい場合:\nEdgeの右上「…」→ 設定 → ダウンロード → 「ダウンロード時の動作を毎回確認する」をON。\n保存のたびにフォルダを選べるようになります(前回の場所が最初に出ます)。");
+    }
+  }
+  const blob=new Blob([json],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download=fname; a.click(); URL.revokeObjectURL(a.href);
+}
+async function doImport(file){
+  try{
+    const data=JSON.parse(await file.text());
+    if(!data||!data.days) throw 0;
+    if(!confirm("バックアップを読み込みます。同じ日付・マスター・メンバー・ひな形は上書きされます。よろしいですか?")) return;
+    if(Array.isArray(data.master)){ master=data.master; await stSet("kotei-master",master); }
+    if(Array.isArray(data.members)){ members=data.members; await stSet("kotei-members",members); }
+    if(data.rules&&typeof data.rules==="object"){ rules=data.rules; await stSet("kotei-rules",rules); }
+    for(const d in data.days){ await stSet("kotei-day:"+d,data.days[d]); }
+    if(data.tpls){ for(const t in data.tpls){ await stSet("kotei-tpl:"+t,data.tpls[t]); } }
+    rebuildDatalists(); renderMst(); renderMem(); await refreshSaved(); await refreshTpl(); await loadDay(curDate);
+    alert("読み込みました。");
+  }catch(e){ alert("読み込めませんでした。バックアップファイルを確認してください。"); }
+}
+
+/* ================= events ================= */
+function tab(which){
+  [["tabK","paneK"],["tabM","paneM"],["tabP","paneP"]].forEach(([t,p])=>{
+    $(t).classList.toggle("on",t===which); $(p).classList.toggle("on","pane"+which.slice(3)===p);
+  });
+}
+$("tabK").onclick=()=>tab("tabK"); $("tabM").onclick=()=>tab("tabM"); $("tabP").onclick=()=>tab("tabP");
+
+$("dateSel").addEventListener("change",e=>{ if(e.target.value) loadDay(e.target.value); });
+$("savedSel").addEventListener("change",e=>{ if(e.target.value) loadDay(e.target.value); });
+$("btnSaveNow").onclick=saveAllNow;
+$("btnReload").onclick=()=>loadDay(curDate);
+$("btnDelDay").onclick=async()=>{
+  if(!confirm(curDate+" の工程表を削除しますか?(元に戻せません。心配な場合は先にバックアップ保存を)")) return;
+  await stDel("kotei-day:"+curDate); day=blankDay(); ensureAtt(); renderAtt(); rebuild(); refreshSaved(); setStat("削除しました");
+};
+$("btnCopy").onclick=async()=>{
+  const d=prompt("コピー先の日付を入力してください(例 2026-07-03)",curDate);
+  if(!d) return;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){ alert("日付は 2026-07-03 の形式で入力してください。"); return; }
+  let exist=null; try{ exist=await stGet("kotei-day:"+d); }catch(e){}
+  if(exist&&!confirm(d+" には既に工程表があります。上書きしますか?")) return;
+  await stSet("kotei-day:"+d,day); await refreshSaved(); loadDay(d);
+};
+$("btnTplApply").onclick=tplApply;
+$("btnTplSave").onclick=tplSave;
+$("btnTplDel").onclick=tplDel;
+$("btnExport").onclick=e=>doExport(e.shiftKey);
+$("btnExport").title="OneDriveの工程表フォルダなど、決めた場所に保存します(Shiftを押しながらクリックで保存先を選び直し)";
+$("btnImport").onclick=()=>$("impFile").click();
+$("impFile").addEventListener("change",e=>{ if(e.target.files[0]) doImport(e.target.files[0]); e.target.value=""; });
+$("btnPrint").onclick=()=>{ buildPrint(); autoFitPrint(); window.print(); };
+function autoFitPrint(){
+  const ps=$("printSheet");
+  // 画面外に一時レンダリングして、各セルの文字がはみ出す場合は入るまで縮小(最小6pt)
+  ps.style.cssText="display:block;position:fixed;left:-13000px;top:0;visibility:hidden;background:#fff";
+  ps.querySelectorAll("table.pmain td").forEach(td=>{
+    if(!td.textContent.trim()) return;
+    let fs=parseFloat(getComputedStyle(td).fontSize);
+    const min=6*(96/72); let guard=60;
+    while(guard-->0 && fs>min && (td.scrollWidth>td.clientWidth+1 || td.scrollHeight>td.clientHeight+1)){
+      fs-=0.7; td.style.fontSize=fs+"px";
+    }
+  });
+  ps.querySelectorAll("table.patt td").forEach(td=>{
+    if(!td.textContent.trim()) return;
+    let fs=parseFloat(getComputedStyle(td).fontSize);
+    const min=7*(96/72); let guard=40;
+    while(guard-->0 && fs>min && td.scrollWidth>td.clientWidth+1){ fs-=0.7; td.style.fontSize=fs+"px"; }
+  });
+  ps.style.cssText="";
+}
+
+$("btnBlk2").onclick=()=>{
+  if(day.blocks.length>=2) return;
+  day.blocks.push(blankBlock("厨房さん",BASE_ROWS2));
+  rebuild(); schedDay();
+};
+$("btnAttAdd").onclick=()=>{
+  day.att.push({name:"",r1:"盛付",r2:"",time:"",timeMan:false,fixed:false,pour:true});
+  renderAtt(); schedDay();
+};
+$("btnAttOther").onclick=()=>{
+  let idx=4; while(idx<day.att.length&&!day.att[idx].fixed&&day.att[idx].pour===false) idx++;
+  day.att.splice(idx,0,{name:"",r1:"",r2:"",time:"",timeMan:false,fixed:false,pour:false});
+  renderAtt(); fillAll(); schedDay();
+};
+/* シフト枠のドラッグ移動 */
+let attDrag=null;
+$("attT").addEventListener("dragstart",e=>{
+  const g=e.target.closest? e.target.closest(".grip"):null;
+  if(!g){ e.preventDefault(); return; }
+  attDrag=+g.dataset.gi;
+  e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("text/plain","att");
+});
+$("attT").addEventListener("dragover",e=>{
+  if(attDrag==null) return;
+  const td=e.target.closest("td[data-ci]"); if(!td) return;
+  const a=day.att[+td.dataset.ci]; if(!a||a.fixed) return;
+  e.preventDefault();
+});
+$("attT").addEventListener("drop",e=>{
+  if(attDrag==null) return;
+  const td=e.target.closest("td[data-ci]"); if(!td) return;
+  const to=+td.dataset.ci, arr=day.att;
+  if(!arr[to]||arr[to].fixed) return;
+  e.preventDefault();
+  const [mv]=arr.splice(attDrag,1); arr.splice(to,0,mv);
+  attDrag=null; renderAtt(); fillAll(); schedDay();
+});
+$("attT").addEventListener("dragend",()=>{ attDrag=null; });
+$("attT").addEventListener("input",attInput);
+$("attT").addEventListener("change",attChange);
+$("attT").addEventListener("click",attClick);
+
+$("mstFilter").addEventListener("input",renderMst);
+$("btnMstAdd").onclick=()=>{ master.unshift({code:"",sym:"",name:"",sec:"",rice:"",ppl:""}); renderMst(); schedMst(); };
+$("mstT").addEventListener("input",mstInput);
+$("mstT").addEventListener("click",mstClick);
+
+$("btnMemAdd").onclick=()=>{
+  const n=$("memName").value.trim(); if(!n) return;
+  if(members.includes(n)){ alert("同じ名前が既に登録されています。"); return; }
+  members.push(n);
+  const ru=$("memRule").value.trim(); if(ru){ rules[n]=ru; schedRul(); }
+  $("memName").value=""; $("memRule").value=""; renderMem(); renderAtt(); schedMem();
+};
+$("memName").addEventListener("keydown",e=>{ if(e.key==="Enter") $("btnMemAdd").click(); });
+$("memT").addEventListener("input",e=>{
+  const ix=e.target.dataset.rx; if(ix==null) return;
+  const v=e.target.value.trim();
+  if(v) rules[members[+ix]]=v; else delete rules[members[+ix]];
+  schedRul(); recalc();
+});
+$("memT").addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b||b.dataset.x==null) return;
+  const ix=+b.dataset.x;
+  if(confirm(`「${members[ix]}」を削除しますか?`)){ delete rules[members[ix]]; members.splice(ix,1); renderMem(); renderAtt(); schedMem(); schedRul(); }
+});
+
+/* ================= init ================= */
+async function boot(){
+ try{
+  let m=await stGet("kotei-master");
+  if(!m){ m=DEFAULT_MASTER; await stSet("kotei-master",m); }
+  else{
+    // 2026-07: Excel商品一覧との差分を取り込む(ユーザーが編集済みの行は触らない)
+    let changed=false;
+    const p494=m.find(x=>String(x.code)==="494"&&x.name==="NEW(名称未登録)");
+    if(p494){ Object.assign(p494,{sym:"B-8",name:"しずおか物語【9ます】NEW",sec:12,rice:"炊込",ppl:6}); changed=true; }
+    if(!m.some(x=>String(x.code)==="495")){ m.push({code:"495",sym:"B-7",name:"極みハンバーグ",sec:12,rice:"",ppl:5}); changed=true; }
+    const p470=m.find(x=>String(x.code)==="470");
+    if(p470&&String(p470.sec).trim()===""){ p470.sec=6; p470.ppl=4; changed=true; }
+    if(!m.some(x=>String(x.code)==="277")){ m.push({code:"277",sym:"",name:"留置夕食",sec:"",rice:"",ppl:4}); changed=true; }
+    if(!m.some(x=>String(x.code)==="278")){ m.push({code:"278",sym:"",name:"留置昼食",sec:"",rice:"",ppl:4}); changed=true; }
+    if(changed) await stSet("kotei-master",m);
+  }
+  master=m;
+  let mem=await stGet("kotei-members");
+  if(!mem){ mem=DEFAULT_MEMBERS; await stSet("kotei-members",mem); }
+  members=mem;
+  if(!members.includes("竹村")){ members.push("竹村"); await stSet("kotei-members",members); }
+  let ru=await stGet("kotei-rules");
+  if(!ru){ ru=DEFAULT_RULES; await stSet("kotei-rules",ru); }
+  rules=ru;
+  rebuildDatalists(); renderMst(); renderMem();
+  await refreshSaved(); await refreshTpl();
+  await loadDay(todayStr(),{silent:true});
+  setStat("保存先: クラウド(共有)");
+ }catch(e){
+  $("storBanner").textContent="クラウドに接続できませんでした("+((e&&e.message)||e)+")。ネット接続を確認して、ページを再読み込みしてください。";
+  $("storBanner").style.display="block"; setStat("接続エラー",true);
+ }
+}
+$("lgBtn").onclick=async()=>{
+  $("lgErr").textContent="";
+  $("lgBtn").disabled=true;
+  try{
+    await doLogin($("lgEmail").value.trim(),$("lgPass").value);
+    $("loginOv").style.display="none";
+    await boot();
+  }catch(e){ $("lgErr").textContent=(e&&e.message)||"ログインできませんでした"; }
+  $("lgBtn").disabled=false;
+};
+$("lgPass").addEventListener("keydown",e=>{ if(e.key==="Enter") $("lgBtn").click(); });
+$("btnLogout").onclick=()=>{
+  if(!confirm("ログアウトしますか?(次に開くときにパスワードが必要になります)")) return;
+  try{ localStorage.removeItem("kotei-rt"); }catch(e){}
+  location.reload();
+};
+(async function init(){
+  bindBlocks();
+  if(await tryRefresh()){ await boot(); }
+  else{ $("loginOv").style.display="flex"; $("lgPass").focus(); }
+})();
+</script>
+</body>
+</html>
