@@ -93,7 +93,7 @@ td.rice{width:62px}
 td.asg{width:78px;position:relative}
 td.asg select{font-size:13px}
 td.rownum{width:24px;text-align:center;color:var(--mut);font-size:10px;background:#f4f3ef!important}
-td.ops2{width:206px;text-align:center;background:#f4f3ef!important;white-space:nowrap;
+td.ops2{width:164px;text-align:center;background:#f4f3ef!important;white-space:nowrap;
   position:sticky;right:0;z-index:1;border-left:2px solid var(--line)!important}
 td.ops2 .mini{font-size:12.5px;font-weight:700;color:var(--navy);border-color:#93a2b8;padding:3px 6px}
 td.ops2 .mini:hover{background:var(--soft);border-color:var(--navy)}
@@ -111,9 +111,10 @@ td.memoTd input{font-weight:700;color:var(--memo-ink);font-size:14px}
 .swap{position:absolute;right:-8px;top:50%;transform:translateY(-50%);z-index:3;border:1px solid var(--line);
   background:#fff;border-radius:50%;width:15px;height:15px;font-size:9px;line-height:1;color:var(--mut);padding:0;display:none}
 td.asg:hover .swap{display:block}
-.agrip{position:absolute;left:0;top:50%;transform:translateY(-50%);display:none;cursor:grab;
-  font-size:11px;color:var(--mut);z-index:3;background:#fff;border-radius:3px;padding:0 1px;line-height:1}
-td.asg:hover .agrip{display:block}
+.agrip{position:absolute;left:0;top:0;bottom:0;width:14px;display:flex;align-items:center;justify-content:center;
+  cursor:grab;font-size:10px;color:#9aa0a8;background:#f2f1ec;border-right:1px solid #e2dfd6;z-index:2;user-select:none}
+.agrip:hover{color:var(--accent);background:#fdf3ec}
+td.asg select{padding-left:17px}
 td.asg.dropTgtA{outline:2px dashed var(--accent);outline-offset:-2px}
 .legend{font-size:11px;color:var(--mut);margin-top:6px;line-height:1.7}
 .legend b{color:var(--accent)}
@@ -200,6 +201,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
   <div class="ctrl">
     <label>製造日</label>
     <input type="date" id="dateSel">
+    <b id="yobiTx" style="font-size:15px;min-width:32px"></b>
     <select id="savedSel"><option value="">保存済み一覧…</option></select>
     <span class="sep"></span>
     <div class="chip">盛付朝礼 <b id="mornChip">--:--</b></div>
@@ -502,7 +504,7 @@ function rebuildDatalists(){
 function esc(s){ return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;"); }
 
 /* ================= blocks / main tables ================= */
-const OPS_BTNS = `<button class="mini" data-f="ins" title="この行の上に1行挿入">挿</button><button class="mini" data-f="up" title="上へ">▲</button><button class="mini" data-f="dn" title="下へ">▼</button><button class="mini" data-f="memo" title="メモ行 ⇔ 商品行 切替">メ</button><button class="mini" data-f="par" title="並行作業 ⇔ 通常(時間の流れに入れない行。開始か終了を手入力)">並</button><button class="mini asgr" data-f="asgrst" title="担当を上の行と同じ並びに戻す">担</button><button class="mini" data-f="clr" title="行をクリア(行は残す)">✕</button><button class="mini" data-f="rowdel" title="この行を削除して下を詰める">削</button>`;
+const OPS_BTNS = `<button class="mini" data-f="ins" title="この行の上に1行挿入">挿</button><button class="mini" data-f="memo" title="メモ行 ⇔ 商品行 切替">メ</button><button class="mini" data-f="par" title="並行作業 ⇔ 通常(時間の流れに入れない行。開始か終了を手入力)">並</button><button class="mini asgr" data-f="asgrst" title="担当を上の行と同じ並びに戻す">担</button><button class="mini" data-f="clr" title="行をクリア(行は残す)">✕</button><button class="mini" data-f="rowdel" title="この行を削除して下を詰める">削</button>`;
 
 function rowHtml(b,i,r){
   if(r.type==="memo"){
@@ -528,7 +530,7 @@ function rowHtml(b,i,r){
     <td class="rice"><input data-f="rice" list="dlRice"></td>
     <td class="num"><input data-f="ppl" inputmode="numeric"></td>`;
   for(let a=0;a<NASG;a++){
-    h+=`<td class="asg"><span class="agrip" draggable="true" data-a="${a}" title="ドラッグで担当を入替">⠿</span><select data-f="asg" data-a="${a}"></select>${a<NASG-1?`<button class="swap" data-f="swap" data-a="${a}" title="右と入れ替え">⇄</button>`:""}</td>`;
+    h+=`<td class="asg"><span class="agrip" draggable="true" data-a="${a}" title="ここをつかんでドラッグで担当を入替">⠿</span><select data-f="asg" data-a="${a}"></select></td>`;
   }
   h+=`<td class="note"><input data-f="note"></td>
     <td class="ops2">${OPS_BTNS}</td></tr>`;
@@ -927,6 +929,10 @@ function attClick(e){
 /* ================= day load/save ================= */
 async function loadDay(d,{silent}={}){
   curDate=d; $("dateSel").value=d;
+  const [yy,mo2,dd2]=d.split("-").map(Number);
+  const yb=new Date(yy,mo2-1,dd2).getDay();
+  $("yobiTx").textContent="("+"日月火水木金土"[yb]+")";
+  $("yobiTx").style.color= yb===0?"#c62828" : yb===6?"#1565c0" : "var(--ink)";
   let got=null; loadFailed=false;
   try{ got=await stGet("kotei-day:"+d); }
   catch(e){ loadFailed=true; }
