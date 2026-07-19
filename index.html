@@ -263,6 +263,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
   <datalist id="dlRoleDef">
     <option value="調理"><option value="米"><option value="唐揚"><option value="仕込"><option value="盛付">
     <option value="洗浄"><option value="折"><option value="早洗"><option value="H"><option value="シール"><option value="配">
+    <option value="掃除"><option value="配送">
   </datalist>
 </div>
 
@@ -321,8 +322,8 @@ const ROLE_RULES = {"調理":"-55","米":"-25","唐揚":"5:00","仕込":""};
 /* 基本役割(シフト表取込で使う)の初期値。メンバータブでいつでも変更可 */
 const DEFAULT_DEFROLES = {
  "岩崎":{r1:"調理",r2:""},"岩田":{r1:"調理",r2:""},"青木":{r1:"米",r2:""},"浦田":{r1:"米",r2:""},
- "長内":{r1:"唐揚",r2:""},"ローズ":{r1:"盛付",r2:""},"山本":{r1:"盛付",r2:""},"林":{r1:"盛付",r2:""},
- "上中":{r1:"盛付",r2:""},"藤田":{r1:"盛付",r2:""},"松山":{r1:"盛付",r2:""},"山田":{r1:"盛付",r2:""},
+ "長内":{r1:"唐揚",r2:""},"ローズ":{r1:"盛付",r2:"仕込"},"山本":{r1:"盛付",r2:"掃除"},"林":{r1:"盛付",r2:""},
+ "上中":{r1:"盛付",r2:"折"},"藤田":{r1:"盛付",r2:""},"松山":{r1:"盛付",r2:"配送"},"山田":{r1:"盛付",r2:""},
  "森山":{r1:"盛付",r2:""},"竹村":{r1:"盛付",r2:""},"見城":{r1:"盛付",r2:""},"北村":{r1:"盛付",r2:""},
  "小林":{r1:"盛付",r2:""}};
 const RICE_OPTS = ["","炊込","酢飯","稲荷","チキン","その他"];
