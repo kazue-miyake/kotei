@@ -229,7 +229,9 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
       <h2>出勤者(印刷では朝礼時刻の隣に表示されます)</h2>
       <button class="btn" id="btnAttAdd">＋ 盛付の枠を追加</button>
       <button class="btn" id="btnAttOther">＋ その他の枠を追加</button>
-      <span class="hint">左の4枠は調理・米・唐揚・仕込で固定。出勤時間は朝礼とルール(メンバータブ)から自動(手書き換え可・空欄で自動)。担当の自動割当は盛付枠の先頭4人。緑の「その他の枠」(洗浄・折など)は自動割当に数えません。枠は⠿をつかんでドラッグで移動、「盛/他」ボタンで種類切替</span>
+      <button class="btn pri" id="btnShift">シフト表取込(Excel)</button>
+      <input type="file" id="shiftFile" accept=".xlsx,.xlsm,.xls" style="display:none">
+      <span class="hint">「シフト表取込」=出勤表Excelを選ぶと1か月分の名前が自動で入ります(名前が入っていない日だけ)。左の4枠は調理・米・唐揚・仕込で固定。出勤時間は朝礼とルール(メンバータブ)から自動(手書き換え可・空欄で自動)。担当の自動割当は盛付枠の先頭4人。緑の「その他の枠」(洗浄・折など)は自動割当に数えません。枠は⠿をつかんでドラッグで移動、「盛/他」ボタンで種類切替</span>
     </div>
     <div class="attstrip"><table class="attT" id="attT"></table></div>
   </div>
@@ -258,6 +260,10 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
     <option value="売店"><option value="F"><option value="D"><option value="E"><option value="G"><option value="H">
     <option value="唐・仕"><option value="F・仕">
   </datalist>
+  <datalist id="dlRoleDef">
+    <option value="調理"><option value="米"><option value="唐揚"><option value="仕込"><option value="盛付">
+    <option value="洗浄"><option value="折"><option value="早洗"><option value="H"><option value="シール"><option value="配">
+  </datalist>
 </div>
 
 <!-- ============ 商品マスター ============ -->
@@ -283,8 +289,9 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
       <button class="btn pri" id="btnMemAdd">＋ 登録</button>
     </div>
     <div class="hint">ここで登録した人が、出勤者と盛付担当の選択肢になります。<br>
-      出勤時間ルール: 「<b>-15</b>」=朝礼の15分前 ／「<b>0</b>」=朝礼と同じ ／「<b>7:00</b>」=毎日7:00固定 ／ 空欄=自動なし。シフト表の出勤時間はこのルールから自動計算されます(毎日手で書き換えもできます)。</div>
-    <table class="mst" id="memT" style="max-width:560px"></table>
+      出勤時間ルール: 「<b>-15</b>」=朝礼の15分前 ／「<b>0</b>」=朝礼と同じ ／「<b>7:00</b>」=毎日7:00固定 ／「<b>7:00～9:00</b>」=そのまま表示(固定) ／ 空欄=自動なし。シフト表の出勤時間はこのルールから自動計算されます(毎日手で書き換えもできます)。<br>
+      基本役割: 「シフト表取込」のとき、出勤表の記号が数字やA～Gなどの日はここの役割で枠に入ります(仕・唐・米・Hの記号はそちらが優先)。役割が2行の人は上下に登録。「盛付」の人は盛付枠、それ以外(折・Hなど)は緑のその他枠に入ります。</div>
+    <table class="mst" id="memT" style="max-width:760px"></table>
   </div>
 </div>
 
@@ -311,10 +318,17 @@ const DEFAULT_MEMBERS = [];
 /* 出勤時間ルール: "-15"=朝礼の15分前 / "0"=朝礼と同じ / "7:00"=固定時刻 / ""=自動なし */
 const DEFAULT_RULES = {};
 const ROLE_RULES = {"調理":"-55","米":"-25","唐揚":"5:00","仕込":""};
+/* 基本役割(シフト表取込で使う)の初期値。メンバータブでいつでも変更可 */
+const DEFAULT_DEFROLES = {
+ "岩崎":{r1:"調理",r2:""},"岩田":{r1:"調理",r2:""},"青木":{r1:"米",r2:""},"浦田":{r1:"米",r2:""},
+ "長内":{r1:"唐揚",r2:""},"ローズ":{r1:"盛付",r2:""},"山本":{r1:"盛付",r2:""},"林":{r1:"盛付",r2:""},
+ "上中":{r1:"盛付",r2:""},"藤田":{r1:"盛付",r2:""},"松山":{r1:"盛付",r2:""},"山田":{r1:"盛付",r2:""},
+ "森山":{r1:"盛付",r2:""},"竹村":{r1:"盛付",r2:""},"見城":{r1:"盛付",r2:""},"北村":{r1:"盛付",r2:""},
+ "小林":{r1:"盛付",r2:""}};
 const RICE_OPTS = ["","炊込","酢飯","稲荷","チキン","その他"];
 const BASE_ROWS = 20, BASE_ROWS2 = 8, PER_PAGE = 20, NASG = 6, SETUP_SEC = 300, MAX_ROWS = 35;
 
-let master = [], members = [], rules = {}, day = null, curDate = "";
+let master = [], members = [], rules = {}, defRoles = {}, day = null, curDate = "";
 let storageOK = true;
 
 const $ = id => document.getElementById(id);
@@ -439,6 +453,9 @@ function schedMem(){ setStat("変更あり…"); clearTimeout(tmMem); tmMem=setT
 let tmRul=null;
 function schedRul(){ setStat("変更あり…"); clearTimeout(tmRul); tmRul=setTimeout(async()=>{
   if(await stSet("kotei-rules",rules)) setStat("保存済み "+new Date().toTimeString().slice(0,5)); },700); }
+let tmDrl=null;
+function schedDrl(){ setStat("変更あり…"); clearTimeout(tmDrl); tmDrl=setTimeout(async()=>{
+  if(await stSet("kotei-defroles",defRoles)) setStat("保存済み "+new Date().toTimeString().slice(0,5)); },700); }
 
 /* ================= time helpers ================= */
 function pT(s){ if(s==null) return null; s=String(s).trim().replace(/：/g,":").replace(/；/g,":");
@@ -858,18 +875,21 @@ function ruleTime(rule,morn){
   const m=rule.match(/^-(\d+)$/); if(m) return morn!=null? morn-+m[1] : null;
   return pT(rule); // "7:00"など固定
 }
-function autoTime(a,morn){
+function autoTimeText(a,morn){
   let rule=null;
   if(a.fixed){ rule=ROLE_RULES[String(a.r1).trim()]; if(rule==null||rule==="") rule=rules[a.name]||null; }
   else rule=rules[a.name]||null;
-  return ruleTime(rule,morn);
+  rule=String(rule??"").trim();
+  if(!rule) return "";
+  if(/[～~]/.test(rule)) return rule; /* "7:00～9:00" はそのまま表示(固定) */
+  const t=ruleTime(rule,morn);
+  return t!=null? fT(t):"";
 }
 function updateAttTimes(morn){
   document.querySelectorAll('#attT input[data-af="time"]').forEach(inp=>{
     const a=day.att[+inp.dataset.ai]; if(!a) return;
     if(!a.timeMan){
-      const t=autoTime(a,morn);
-      a.time = t!=null? fT(t):"";
+      a.time = autoTimeText(a,morn);
       if(document.activeElement!==inp) inp.value=a.time;
     }
     inp.classList.toggle("man",!!a.timeMan);
@@ -1017,10 +1037,13 @@ function mstClick(e){ const b=e.target.closest("button"); if(!b||b.dataset.mf!==
 
 /* ================= members tab ================= */
 function renderMem(){
-  let h=`<tr><th>名前</th><th style="width:230px">出勤時間ルール</th><th style="width:56px"></th></tr>`;
+  let h=`<tr><th>名前</th><th style="width:100px">基本役割(上)</th><th style="width:100px">基本役割(下)</th><th style="width:200px">出勤時間ルール</th><th style="width:56px"></th></tr>`;
   members.forEach((m,ix)=>{
+    const d=defRoles[m]||{};
     h+=`<tr><td style="padding:4px 8px;font-weight:700">${esc(m)}</td>
-      <td><input data-rx="${ix}" value="${esc(rules[m]||"")}" placeholder="例: -15 / 0 / 7:00"></td>
+      <td><input data-d1="${ix}" value="${esc(d.r1||"")}" list="dlRoleDef" placeholder="盛付 など"></td>
+      <td><input data-d2="${ix}" value="${esc(d.r2||"")}" list="dlRoleDef" placeholder="折 など"></td>
+      <td><input data-rx="${ix}" value="${esc(rules[m]||"")}" placeholder="例: -15 / 0 / 7:00 / 7:00～9:00"></td>
       <td style="text-align:center"><button class="mini" data-x="${ix}">削除</button></td></tr>`;
   });
   $("memT").innerHTML=h;
@@ -1121,7 +1144,7 @@ async function collectBackup(){
   const tkeys=await stList("kotei-tpl:");
   const tpls={};
   for(const k of tkeys){ let v=null; try{ v=await stGet(k); }catch(e){} if(v) tpls[k.replace("kotei-tpl:","")]=v; }
-  return {ver:2,exported:new Date().toISOString(),master,members,rules,days,tpls};
+  return {ver:2,exported:new Date().toISOString(),master,members,rules,defRoles,days,tpls};
 }
 async function doExport(rePick){
   const json=JSON.stringify(await collectBackup(),null,1);
@@ -1163,11 +1186,153 @@ async function doImport(file){
     if(Array.isArray(data.master)){ master=data.master; await stSet("kotei-master",master); }
     if(Array.isArray(data.members)){ members=data.members; await stSet("kotei-members",members); }
     if(data.rules&&typeof data.rules==="object"){ rules=data.rules; await stSet("kotei-rules",rules); }
+    if(data.defRoles&&typeof data.defRoles==="object"){ defRoles=data.defRoles; await stSet("kotei-defroles",defRoles); }
     for(const d in data.days){ await stSet("kotei-day:"+d,data.days[d]); }
     if(data.tpls){ for(const t in data.tpls){ await stSet("kotei-tpl:"+t,data.tpls[t]); } }
     rebuildDatalists(); renderMst(); renderMem(); await refreshSaved(); await refreshTpl(); await loadDay(curDate);
     alert("読み込みました。");
   }catch(e){ alert("読み込めませんでした。バックアップファイルを確認してください。"); }
+}
+
+/* ================= シフト表(Excel)取込 ================= */
+function loadXLSX(){ return new Promise((res,rej)=>{
+  if(window.XLSX) return res();
+  const s=document.createElement("script");
+  s.src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+  s.onload=()=>res(); s.onerror=()=>rej(new Error("Excel読込ライブラリを取得できませんでした。ネット接続を確認してください。"));
+  document.head.appendChild(s);
+}); }
+function zen2han(s){ return String(s??"").replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/／/g,"/").replace(/[\s　]/g,""); }
+/* セルの記号 → 役割。null=その日は入れない */
+function cellToRole(v,name){
+  const s=zen2han(v).trim();
+  if(!s) return null;
+  if(/^[〇○△\/]+$/.test(s)||/[✖✕×]/.test(s)) return null; /* 休み・〇・△は入れない */
+  const found=[];
+  if(s.includes("唐")) found.push("唐揚");
+  if(s.includes("米")) found.push("米");
+  if(s.includes("仕")) found.push("仕込");
+  if(!found.length&&s.includes("調")) found.push("調理");
+  if(/[HＨ]/.test(s)) found.push("H");
+  if(!found.length&&s.includes("盛")) found.push("盛付");
+  if(!found.length&&s.includes("早洗")) found.push("早洗");
+  if(!found.length&&s.includes("洗")) found.push("洗浄");
+  if(!found.length&&s.includes("折")) found.push("折");
+  if(found.length) return {r1:found[0],r2:found[1]||""};
+  /* A~Gの記号・数字などは出勤扱い → 基本役割(メンバータブ)を入れる */
+  const d=defRoles[name];
+  if(d&&String(d.r1||"").trim()) return {r1:String(d.r1).trim(),r2:String(d.r2||"").trim(),def:true};
+  return {noRole:true};
+}
+/* その日の出勤者リスト(Excelの上から順) → シフト枠 */
+function buildAttForDay(list){
+  const att=[];
+  for(let i=0;i<4;i++) att.push({name:"",r1:FIXED_ROLES[i],r2:"",time:"",timeMan:false,fixed:true});
+  /* 固定4枠(調理・米・唐揚・仕込)は、記号で明記された人を基本役割の人より優先 */
+  [false,true].forEach(defPass=>{
+    list.forEach(p=>{
+      if(p._done||!!p.def!==defPass) return;
+      const fi=FIXED_ROLES.indexOf(p.r1);
+      if(fi>=0&&!att[fi].name){ att[fi].name=p.name; att[fi].r2=p.r2||""; p._done=true; }
+    });
+  });
+  const extra=[],pours=[];
+  list.forEach(p=>{
+    if(p._done) return;
+    if(p.r1==="盛付") pours.push({name:p.name,r1:"盛付",r2:p.r2||"",time:"",timeMan:false,fixed:false,pour:true});
+    else extra.push({name:p.name,r1:p.r1,r2:p.r2||"",time:"",timeMan:false,fixed:false,pour:false});
+  });
+  while(pours.length<4) pours.push({name:"",r1:"盛付",r2:"",time:"",timeMan:false,fixed:false,pour:true});
+  return att.concat(extra,pours);
+}
+const YOBI="日月火水木金土";
+function sheetInfo(ws){ /* {mon, wd(1日の曜日)} を読む */
+  const a1=ws&&ws.A1? String(ws.A1.w||ws.A1.v||"") : "";
+  const b1=ws&&ws.B1? String(ws.B1.w||ws.B1.v||"") : "";
+  const m=a1.match(/(\d+)月/);
+  return {mon:m?+m[1]:null, wd:b1.charAt(0)};
+}
+async function importShift(buf,optSheet,optYear){
+  await loadXLSX();
+  const wb=XLSX.read(buf,{type:"array"});
+  const names=wb.SheetNames;
+  let sn=optSheet;
+  if(!sn){
+    /* 表示中の月に合うシートを探して初期候補にする */
+    const Y=+curDate.slice(0,4), M=+curDate.slice(5,7);
+    let def="";
+    names.forEach((n,i)=>{
+      const inf=sheetInfo(wb.Sheets[n]);
+      if(inf.mon===M&&YOBI[new Date(Y,M-1,1).getDay()]===inf.wd&&!def) def=String(i+1);
+    });
+    const a=prompt("どのシートを取り込みますか? 番号を入力してください。\n"+names.map((n,i)=>(i+1)+": "+n).join("\n"),def);
+    if(!a) return;
+    sn=names[parseInt(a,10)-1];
+    if(!sn){ alert("番号が正しくありません。"); return; }
+  }
+  const ws=wb.Sheets[sn];
+  const arr=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:""});
+  /* 月と日付の列を読む(1行目=曜日、2行目=日付。1日は名前列と結合のためB列) */
+  const inf=sheetInfo(ws);
+  const mon=inf.mon;
+  if(!mon){ alert("このシートの1行目から「◯月」が読み取れませんでした。"); return; }
+  const dayCol={};
+  ((arr[1])||[]).forEach((v,c)=>{ const d=parseInt(String(v).trim(),10);
+    if(d>=1&&d<=31&&!(d in dayCol)) dayCol[d]=(c===0?1:c); });
+  if(!(1 in dayCol)){ alert("このシートの2行目から日付(1~31)が読み取れませんでした。"); return; }
+  /* 年の判定: 1日の曜日が合う年を探す */
+  let year=optYear;
+  if(!year){
+    const Y=+curDate.slice(0,4), cand=[];
+    for(let y=Y-1;y<=Y+1;y++){ if(YOBI[new Date(y,mon-1,1).getDay()]===inf.wd) cand.push(y); }
+    if(cand.length===1) year=cand[0];
+    else{ const a=prompt("シート「"+sn+"」("+mon+"月)は何年分ですか? 西暦で入力してください。",String(Y)); if(!a) return; year=parseInt(a,10); }
+    if(!(year>2000&&year<2100)){ alert("年が正しくありません。"); return; }
+  }
+  if(!confirm("シート「"+sn+"」を "+year+"年"+mon+"月分として取り込みます。\n(すでに名前が入っている日は変更しません)\nよろしいですか?")) return;
+  /* 人の行を探す(名前列とメンバー登録の照合。登録がない人は無視) */
+  const sorted=[...members].sort((a,b)=>b.length-a.length);
+  const seen=new Set(), people=[];
+  for(let ri=2;ri<arr.length&&ri<60;ri++){
+    const nm=String((arr[ri]||[])[0]||"").trim();
+    if(!nm) continue;
+    const m=sorted.find(x=>nm.startsWith(x));
+    if(!m||seen.has(m)) continue;
+    seen.add(m); people.push({member:m,row:arr[ri]||[]});
+  }
+  if(!people.length){ alert("メンバー登録と一致する名前がこのシートに見つかりませんでした。"); return; }
+  /* 日ごとに出勤者を組み立てて保存 */
+  const dim=new Date(year,mon,0).getDate(), pad=n=>String(n).padStart(2,"0");
+  let done=0,skip=0; const none=new Set(); let touchedCur=false;
+  setStat("シフト取込中…");
+  for(let d=1;d<=dim;d++){
+    const col=dayCol[d]; if(col==null) continue;
+    const list=[];
+    people.forEach(p=>{
+      const r=cellToRole(p.row[col],p.member);
+      if(!r) return;
+      if(r.noRole){ none.add(p.member); return; }
+      list.push({name:p.member,r1:r.r1,r2:r.r2});
+    });
+    if(!list.length) continue;
+    const ds=year+"-"+pad(mon)+"-"+pad(d);
+    let cur=null;
+    try{ cur=await stGet("kotei-day:"+ds); }
+    catch(e){ alert("クラウドに接続できず中断しました。"+ds+"以降は取り込めていません。"); break; }
+    const dd=normDay(cur?deepCopy(cur):blankDay());
+    if(dd.att.some(a=>a&&String(a.name||"").trim())){ skip++; continue; } /* 上書きしない */
+    dd.att=buildAttForDay(list);
+    if(!(await stSet("kotei-day:"+ds,dd))){ alert("保存に失敗し中断しました("+ds+")。"); break; }
+    if(ds===curDate) touchedCur=true;
+    done++;
+  }
+  await refreshSaved();
+  if(touchedCur) await loadDay(curDate,{silent:true});
+  setStat("シフト取込完了");
+  let msg=year+"年"+mon+"月分: "+done+"日分の出勤者を入れました。";
+  if(skip) msg+="\nそのままにした日: "+skip+"日(すでに名前が入っていたため)";
+  if(none.size) msg+="\n基本役割が未登録のため入れられなかった人: "+[...none].join("、")+"\n→ メンバータブで基本役割を登録してから、もう一度取り込むと入ります。";
+  alert(msg);
 }
 
 /* ================= events ================= */
@@ -1201,6 +1366,13 @@ $("btnExport").onclick=e=>doExport(e.shiftKey);
 $("btnExport").title="OneDriveの工程表フォルダなど、決めた場所に保存します(Shiftを押しながらクリックで保存先を選び直し)";
 $("btnImport").onclick=()=>$("impFile").click();
 $("impFile").addEventListener("change",e=>{ if(e.target.files[0]) doImport(e.target.files[0]); e.target.value=""; });
+$("btnShift").onclick=()=>$("shiftFile").click();
+$("shiftFile").addEventListener("change",async e=>{
+  const f=e.target.files[0]; e.target.value="";
+  if(!f) return;
+  try{ await importShift(await f.arrayBuffer()); }
+  catch(err){ alert("シフト表を取り込めませんでした: "+((err&&err.message)||err)); setStat("取込エラー",true); }
+});
 $("btnPrint").onclick=()=>{ buildPrint(); autoFitPrint(); window.print(); };
 function autoFitPrint(){
   const ps=$("printSheet");
@@ -1279,15 +1451,23 @@ $("btnMemAdd").onclick=()=>{
 };
 $("memName").addEventListener("keydown",e=>{ if(e.key==="Enter") $("btnMemAdd").click(); });
 $("memT").addEventListener("input",e=>{
-  const ix=e.target.dataset.rx; if(ix==null) return;
-  const v=e.target.value.trim();
+  const t=e.target;
+  if(t.dataset.d1!=null||t.dataset.d2!=null){
+    const ix=+(t.dataset.d1??t.dataset.d2), key=t.dataset.d1!=null?"r1":"r2", m=members[ix];
+    if(!defRoles[m]) defRoles[m]={r1:"",r2:""};
+    defRoles[m][key]=t.value.trim();
+    if(!defRoles[m].r1&&!defRoles[m].r2) delete defRoles[m];
+    schedDrl(); return;
+  }
+  const ix=t.dataset.rx; if(ix==null) return;
+  const v=t.value.trim();
   if(v) rules[members[+ix]]=v; else delete rules[members[+ix]];
   schedRul(); recalc();
 });
 $("memT").addEventListener("click",e=>{
   const b=e.target.closest("button"); if(!b||b.dataset.x==null) return;
   const ix=+b.dataset.x;
-  if(confirm(`「${members[ix]}」を削除しますか?`)){ delete rules[members[ix]]; members.splice(ix,1); renderMem(); renderAtt(); schedMem(); schedRul(); }
+  if(confirm(`「${members[ix]}」を削除しますか?`)){ delete rules[members[ix]]; delete defRoles[members[ix]]; members.splice(ix,1); renderMem(); renderAtt(); schedMem(); schedRul(); schedDrl(); }
 });
 
 /* ================= init ================= */
@@ -1315,6 +1495,14 @@ async function boot(){
   let ru=await stGet("kotei-rules");
   if(!ru){ ru=DEFAULT_RULES; await stSet("kotei-rules",ru); }
   rules=ru;
+  /* 2026-07: 松山・山本の出勤時間を固定表示に(一度だけ。手で変えた値は触らない) */
+  let ruch=false;
+  if(rules["松山"]==="7:00"){ rules["松山"]="7:00～9:00"; ruch=true; }
+  if(rules["山本"]==="7:00"){ rules["山本"]="7:00～10:00"; ruch=true; }
+  if(ruch) await stSet("kotei-rules",rules);
+  let dr=await stGet("kotei-defroles");
+  if(!dr){ dr=deepCopy(DEFAULT_DEFROLES); await stSet("kotei-defroles",dr); }
+  defRoles=dr;
   rebuildDatalists(); renderMst(); renderMem();
   await refreshSaved(); await refreshTpl();
   await loadDay(todayStr(),{silent:true});
