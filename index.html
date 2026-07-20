@@ -1343,7 +1343,7 @@ async function importShift(buf,optSheet,optYear){
 }
 
 /* ================= 仕込み表(CSV)取込 ================= */
-const SIKOMI_EXCL=["牛タン弁当","焼き鳥弁当","牛しぐれ弁当"]; /* 調理場盛付のため工程表に入れない */
+const SIKOMI_EXCL=["牛タン弁当","焼き鳥弁当","牛しぐれ弁当","検体"]; /* 調理場盛付・検体行は工程表に入れない */
 const KEN_CUST=["ブケトーカイ","もくせい会館","グランヒルズ"];  /* この届け先がある商品は検食+1 */
 /* 日本の祝日(2026-2027)。以降の年は要追加 */
 const JP_HOL=new Set(["2026-01-01","2026-01-12","2026-02-11","2026-02-23","2026-03-20","2026-04-29","2026-05-03","2026-05-04","2026-05-05","2026-05-06","2026-07-20","2026-08-11","2026-09-21","2026-09-22","2026-09-23","2026-10-12","2026-11-03","2026-11-23",
@@ -1373,7 +1373,10 @@ function sikomiRowObj(p){ /* 集計済み商品 → 工程表の行 */
   r.qty=String(p.qty); r.ken=p.ken? String(p.ken):"";
   r.sec=m&&m.sec!==""&&m.sec!=null? String(m.sec):"";
   r.rice=m? (m.rice||"白"):""; r.ppl=m&&m.ppl!==""&&m.ppl!=null? String(m.ppl):"";
+  if(p.ryuchi) r.min="5"; /* 留置は内容が簡単なので5分固定 */
+  if(String(p.code).trim()==="398") r.min="5"; /* 大御所唐揚げは5分(唐揚げ2種で15分) */
   r.note=p.note||"";
+  if(p.orikey) r.impKey=p.orikey; /* 折詰(375)は行ごとに管理 */
   r.impQty=String(p.qty); r.impKen=p.ken? String(p.ken):"";
   return r;
 }
@@ -1381,15 +1384,27 @@ function sikomiSortKey(r){
   const p=parseInt(r.ppl,10);
   return [(isFinite(p)&&p>0)?p:99, (!r.rice||r.rice==="白")?0:1];
 }
+const isOdv=nm=>/オードブル|盛り合わせ|盛合せ/.test(String(nm));
+function fixedRow(nm,q,min,ppl2){ /* 型に毎日入る固定行 */
+  const m=mstByName(nm), r=blankRow();
+  r.name=m?m.name:nm; r.qty=q||""; r.min=min||"";
+  if(m){ r.code=String(m.code||""); r.sym=m.sym||"";
+    r.sec=(m.sec===""||m.sec==null)?"":String(m.sec); r.rice=m.rice||"白";
+    r.ppl=(m.ppl===""||m.ppl==null)?"":String(m.ppl); }
+  else r.rice="白";
+  if(ppl2&&!r.ppl) r.ppl=ppl2;
+  return r;
+}
+function dayNote(r){ r.note="日替わり分(朝に数を確認)"; return r; }
 async function importSikomi(buf){
   const text=new TextDecoder("shift_jis").decode(buf);
   const rows=parseCSV(text);
-  /* データ行を集計(商品Noごと)。連続する同一商品のかたまりごとに【計】と検算 */
+  /* データ行を集計。折詰(375)は内容が毎回違うので行ごと、留置は昼・夕で合算、他は商品Noごと */
   const prods=new Map(); const dates=new Set(); const warns=[]; const noMst=new Set();
-  let gSum=0, gKey=null, lastKey=null;
+  let gSum=0, gKey=null, lastKey=null, oriSeq=0;
   const flushChk=(calc)=>{
     if(gKey!=null&&calc!=null){
-      if(gSum!==calc) warns.push(gKey+": 行の合計"+gSum+"と【計】"+calc+"が不一致(【計】を採用)");
+      if(gSum!==calc) warns.push(gKey+": 行の合計"+gSum+"と【計】"+calc+"が不一致"+(lastKey?"(【計】を採用)":""));
       /* 【計】はシステム計算値なので正とする(壊れた行があっても食数は正しく入る) */
       if(lastKey&&prods.has(lastKey)){ const p=prods.get(lastKey);
         p.calc=(p.calc||0)+calc; }
@@ -1404,48 +1419,46 @@ async function importSikomi(buf){
     const [y,mo,dd]=f[0].trim().split("/").map(Number);
     dates.add(y+"-"+String(mo).padStart(2,"0")+"-"+String(dd).padStart(2,"0"));
     const code=(f[2]||"").trim(), qty=parseInt(f[5],10)||0, cust=(f[6]||"").trim();
+    const jou=(f[8]||"").trim(), kon=(f[9]||"").trim();
     if(gKey!==null&&gKey!==code+" "+name) flushChk(null);
     gKey=code+" "+name; gSum+=qty;
     if(SIKOMI_EXCL.some(x=>name.includes(x))){ lastKey=null; continue; } /* 除外商品の【計】も無視するため */
     const ryuchi=name.includes("留置");
     const ryu=ryuchi? (name.includes("夕")?"夕":"昼") : "";
-    const key=ryuchi? "留置"+ryu : code; /* 留置は昼・夕それぞれ合算(番号は毎食変わるため) */
-    lastKey=key;
-    if(!prods.has(key)) prods.set(key,{code,name,qty:0,ken:0,ryuchi,ryu,times:new Set(),memos:new Set()});
+    const ori= code==="375";
+    const key= ryuchi? "留置"+ryu : (ori? "375#"+(++oriSeq) : code);
+    lastKey= ori? null : key; /* 折詰は行ごとに分けるので【計】の置き換え対象外 */
+    if(!prods.has(key)) prods.set(key,{code,name,qty:0,ken:0,ryuchi,ryu,ori,cust,qs:[],kentai:false,times:new Set(),memos:new Set()});
     const p=prods.get(key);
-    p.qty+=qty;
+    p.qty+=qty; p.qs.push(qty);
+    if(jou.includes("検体")) p.kentai=true; /* 「検体1つ付ける」→検食を作って社内保管=食数+1 */
     if(KEN_CUST.some(x=>cust.includes(x))) p.ken++;
     if((f[7]||"").trim()) p.times.add(f[7].trim());
-    if((f[9]||"").trim()) p.memos.add(f[9].trim().replace(/[\r\n]+/g," "));
+    if(kon) p.memos.add(kon.replace(/[\r\n]+/g," "));
   }
   if(!prods.size){ alert("このCSVから商品が読み取れませんでした。お弁当システムの仕込一覧CSV(998出力)をそのまま選んでください。"); return; }
   if(dates.size>1){ alert("複数の日付が混ざったCSVです("+[...dates].join(", ")+")。1日分ずつ出力したCSVを使ってください。"); return; }
   const ds=[...dates][0];
   if(!confirm(ds+" 分の仕込み表として取り込みます("+prods.size+"品目)。よろしいですか?")) return;
-  /* 行を作って並べる: 盛付人数が少ない順 → 同じ人数ならご飯が白が上 */
+  /* 集計 → 工程表の行へ */
   const newRows=[...prods.values()].map(p=>{
     if(p.calc!=null&&p.calc!==p.qty) p.qty=p.calc; /* 【計】優先 */
-    p.note=[...p.times].slice(0,1).map(t=>"納"+t).join("")+(p.times.size>1?" 他":"");
-    const mm=[...p.memos].join("／"); if(mm) p.note=(p.note?p.note+" ":"")+mm.slice(0,40);
+    if(p.kentai) p.qty+=1; /* 検体分 */
+    const parts=[];
+    if(p.qs.length>1||p.kentai) parts.push(p.qs.join("+")+(p.kentai?"+1":"")); /* 注文の内訳(末尾+1=検体) */
+    if(p.ori&&p.cust) parts.push(p.cust.replace(/株式会社|\(株\)|㈱/g,"").trim().slice(0,8));
+    if(p.times.size) parts.push("納"+[...p.times][0]+(p.times.size>1?"他":""));
+    const mm=[...p.memos].join("／"); if(mm) parts.push(mm.slice(0,30));
+    p.note=parts.join(" ");
+    if(p.ori) p.orikey="375:"+p.cust;
     const r=sikomiRowObj(p);
+    const qn=parseInt(r.qty,10);
+    if(isFinite(qn)&&qn>0&&qn<=9) r.note=("【並べ候補】"+(r.note||"")).trim(); /* 9個以下は「並べ」作業の候補 */
     if(!p.ryuchi&&!findByCode(p.code)) noMst.add(p.code+" "+p.name);
     return r;
   });
-  /* 平日は日替わり受注の枠(仕込み表に出ない別ルート分)を仮の数で追加。当日朝に修正する運用 */
-  let dayAdd=[];
-  if(!isHolExt(ds)){
-    dayAdd=[["金賞唐揚げ弁当","5"],["ﾊﾝﾊﾞｰｸﾞ弁当","13"],["weekly/ピラフ/のし","5"]].map(([nm,q])=>{
-      const m=mstByName(nm), r=blankRow();
-      r.name=m?m.name:nm; r.qty=q; r.note="日替わり分(朝に数を確認)";
-      if(m){ r.code=String(m.code||""); r.sym=m.sym||"";
-        r.sec=(m.sec===""||m.sec==null)?"":String(m.sec); r.rice=m.rice||"白";
-        r.ppl=(m.ppl===""||m.ppl==null)?"":String(m.ppl); }
-      return r; /* impQtyは付けない=再取込で触らない行 */
-    });
-  }
   const cmpRows=(a,b)=>{ const ka=sikomiSortKey(a),kb=sikomiSortKey(b);
     return ka[0]-kb[0]||ka[1]-kb[1]||String(a.code).localeCompare(String(b.code)); };
-  newRows.sort(cmpRows);
   /* 既存データの読み込み */
   let cur=null;
   try{ cur=await stGet("kotei-day:"+ds); }
@@ -1455,19 +1468,44 @@ async function importSikomi(buf){
   let added=0,upd=0,kept=0,del=0,same=0;
   const ryuKind=nm=> nm==="留置昼"||nm==="留置夕" ? nm.slice(2) : null;
   if(!rows0.some(r=>hasProduct(r))){
-    /* まっさらな日: 取込分+日替わり枠を流し込み + 締切プレ入力 */
-    const all=[...newRows,...dayAdd].sort(cmpRows);
+    /* まっさらな日: 決まった型で組み立てる
+       留置夕→留置昼→(平日:ハンバーグ→金賞日替)→金賞CSV→(平日:weekly)→397→398→別注→
+       (平日:日替わり準備→プチ→ごはん屋9:00締切)→オードブル→(平日:翌日用カップ) */
+    const hol=isHolExt(ds);
+    const take=fn=>{ const out=[]; for(let i=newRows.length-1;i>=0;i--){ if(fn(newRows[i])) out.unshift(newRows.splice(i,1)[0]); } return out; };
+    const ryuYu=take(r=>r.name==="留置夕"), ryuHi=take(r=>r.name==="留置昼");
+    const kin198=take(r=>String(r.code).trim()==="198");
+    const k397=take(r=>String(r.code).trim()==="397"), k398=take(r=>String(r.code).trim()==="398");
+    const gohan=take(r=>String(r.code).trim()==="266"||String(r.name).includes("ごはん屋"));
+    const odv=take(r=>isOdv(r.name)).sort(cmpRows);
+    newRows.sort(cmpRows); /* 残り=別注: 人数少ない順→白→番号順 */
+    const all=[...ryuYu,...ryuHi];
+    if(!hol){ all.push(dayNote(fixedRow("ﾊﾝﾊﾞｰｸﾞ弁当","13","")), dayNote(fixedRow("金賞唐揚げ弁当","5","5"))); }
+    all.push(...kin198);
+    if(!hol) all.push(dayNote(fixedRow("weekly/ピラフ/のし","5","")));
+    all.push(...k397,...k398,...newRows);
+    if(!hol){
+      all.push(fixedRow("日替わり準備","","5"), fixedRow("プチ","","15","5"));
+      const g=gohan[0]||fixedRow("ごはん屋弁当","","45","5");
+      g.min="45"; g.end="9:00"; g.endMan=true;
+      g.note=((g.note||"")+" (朝に数を確認)").trim();
+      all.push(g);
+    } else all.push(...gohan);
+    all.push(...odv);
+    if(!hol) all.push(fixedRow("翌日用カップ","",""));
     while(all.length<BASE_ROWS) all.push(blankRow());
     dd2.blocks[0].rows=all;
     const items=all.filter(r=>hasProduct(r));
-    if(isHolExt(ds)){ const last=items[items.length-1]; if(last){ last.end="8:30"; last.endMan=true; } }
-    else{ const g=items.find(r=>String(r.name).includes("ごはん屋")); if(g){ g.end="9:00"; g.endMan=true; } }
+    if(hol){ const last=items[items.length-1]; if(last){ last.end="8:30"; last.endMan=true; } }
     added=items.length;
   }else{
-    /* 再取込: 手修正(今の値≠前回取込値)は上書きせず確認。並びは崩さない。日替わり枠は追加しない */
+    /* 再取込: 手修正(今の値≠前回取込値)は上書きせず確認。並びは崩さない。固定行・日替わり枠は追加しない */
     const findRow=nr=>{
       const ryu=ryuKind(nr.name);
-      const cand=rows0.filter(r=>hasProduct(r)&&( ryu? (String(r.name).includes("留置")&&String(r.name).includes(ryu)) : String(r.code).trim()===String(nr.code).trim() ));
+      const cand=rows0.filter(r=>hasProduct(r)&&(
+        nr.impKey? r.impKey===nr.impKey :
+        ryu? (String(r.name).includes("留置")&&String(r.name).includes(ryu)) :
+        (String(r.code).trim()===String(nr.code).trim()&&String(r.code).trim()!=="375") ));
       return cand.find(r=>r.impQty!==undefined)||cand[0]||null; /* 前回取込の行を優先(同じ番号の日替わり行と区別) */
     };
     for(const nr of newRows){
@@ -1495,7 +1533,9 @@ async function importSikomi(buf){
     for(let i=rows0.length-1;i>=0;i--){ const r=rows0[i];
       if(!hasProduct(r)||r.impQty===undefined) continue;
       const still=newRows.some(nr=>{ const ryu=ryuKind(nr.name);
-        return ryu? (String(r.name).includes("留置")&&String(r.name).includes(ryu)) : String(nr.code).trim()===String(r.code).trim(); });
+        return nr.impKey||r.impKey? nr.impKey===r.impKey :
+          ryu? (String(r.name).includes("留置")&&String(r.name).includes(ryu)) :
+          String(nr.code).trim()===String(r.code).trim(); });
       if(!still&&confirm(r.name+": 今回の仕込み表にありません。この行を削除しますか?")){ rows0.splice(i,1); del++; }
     }
     while(rows0.length<BASE_ROWS) rows0.push(blankRow());
