@@ -213,7 +213,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
     <button class="btn warn" id="btnTplDel">ひな形削除</button>
     <span class="sep"></span>
     <button class="btn pri" id="btnSikomi">仕込み表取込(CSV)</button>
-    <input type="file" id="sikomiFile" accept=".csv,.CSV" style="display:none">
+    <input type="file" id="sikomiFile" accept=".csv,.CSV" multiple style="display:none">
     <button class="btn" id="btnCopy">別の日へコピー</button>
     <button class="btn pri" id="btnSaveNow">今すぐ保存</button>
     <button class="btn" id="btnReload">最新を再読込</button>
@@ -1621,10 +1621,11 @@ $("btnImport").onclick=()=>$("impFile").click();
 $("impFile").addEventListener("change",e=>{ if(e.target.files[0]) doImport(e.target.files[0]); e.target.value=""; });
 $("btnSikomi").onclick=()=>$("sikomiFile").click();
 $("sikomiFile").addEventListener("change",async e=>{
-  const f=e.target.files[0]; e.target.value="";
-  if(!f) return;
-  try{ await importSikomi(await f.arrayBuffer()); }
-  catch(err){ alert("仕込み表を取り込めませんでした: "+((err&&err.message)||err)); setStat("取込エラー",true); }
+  const fl=[...e.target.files]; e.target.value="";
+  for(const f of fl){ /* 複数選択で数日分まとめて取込できる(1ファイル=1日) */
+    try{ await importSikomi(await f.arrayBuffer()); }
+    catch(err){ alert(f.name+" を取り込めませんでした: "+((err&&err.message)||err)); setStat("取込エラー",true); }
+  }
 });
 $("btnShift").onclick=()=>$("shiftFile").click();
 $("shiftFile").addEventListener("change",async e=>{
