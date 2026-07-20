@@ -1363,11 +1363,12 @@ function parseCSV(text){
   row.push(f); if(row.some(x=>x.trim())) out.push(row);
   return out;
 }
+function mstByName(n){ return master.find(x=>String(x.name).trim()===n)||null; }
 function sikomiRowObj(p){ /* 集計済み商品 → 工程表の行 */
   const r=blankRow();
-  const m=p.ryuchi? (master.find(x=>String(x.name).includes("留置昼"))||null) : findByCode(p.code);
+  const m=p.ryuchi? (mstByName("留置"+p.ryu)||master.find(x=>String(x.name).includes("留置"+p.ryu))||null) : findByCode(p.code);
   r.code=p.ryuchi? (m?String(m.code):"") : p.code;
-  r.name=p.ryuchi? "留置" : (m? m.name : p.name);
+  r.name=p.ryuchi? "留置"+p.ryu : (m? m.name : p.name);
   r.sym=m? (m.sym||"") : "";
   r.qty=String(p.qty); r.ken=p.ken? String(p.ken):"";
   r.sec=m&&m.sec!==""&&m.sec!=null? String(m.sec):"";
@@ -1407,9 +1408,10 @@ async function importSikomi(buf){
     gKey=code+" "+name; gSum+=qty;
     if(SIKOMI_EXCL.some(x=>name.includes(x))){ lastKey=null; continue; } /* 除外商品の【計】も無視するため */
     const ryuchi=name.includes("留置");
-    const key=ryuchi? "留置" : code;
+    const ryu=ryuchi? (name.includes("夕")?"夕":"昼") : "";
+    const key=ryuchi? "留置"+ryu : code; /* 留置は昼・夕それぞれ合算(番号は毎食変わるため) */
     lastKey=key;
-    if(!prods.has(key)) prods.set(key,{code,name,qty:0,ken:0,ryuchi,times:new Set(),memos:new Set()});
+    if(!prods.has(key)) prods.set(key,{code,name,qty:0,ken:0,ryuchi,ryu,times:new Set(),memos:new Set()});
     const p=prods.get(key);
     p.qty+=qty;
     if(KEN_CUST.some(x=>cust.includes(x))) p.ken++;
@@ -1429,8 +1431,21 @@ async function importSikomi(buf){
     if(!p.ryuchi&&!findByCode(p.code)) noMst.add(p.code+" "+p.name);
     return r;
   });
-  newRows.sort((a,b)=>{ const ka=sikomiSortKey(a),kb=sikomiSortKey(b);
-    return ka[0]-kb[0]||ka[1]-kb[1]||String(a.code).localeCompare(String(b.code)); });
+  /* 平日は日替わり受注の枠(仕込み表に出ない別ルート分)を仮の数で追加。当日朝に修正する運用 */
+  let dayAdd=[];
+  if(!isHolExt(ds)){
+    dayAdd=[["金賞唐揚げ弁当","5"],["ﾊﾝﾊﾞｰｸﾞ弁当","13"],["weekly/ピラフ/のし","5"]].map(([nm,q])=>{
+      const m=mstByName(nm), r=blankRow();
+      r.name=m?m.name:nm; r.qty=q; r.note="日替わり分(朝に数を確認)";
+      if(m){ r.code=String(m.code||""); r.sym=m.sym||"";
+        r.sec=(m.sec===""||m.sec==null)?"":String(m.sec); r.rice=m.rice||"白";
+        r.ppl=(m.ppl===""||m.ppl==null)?"":String(m.ppl); }
+      return r; /* impQtyは付けない=再取込で触らない行 */
+    });
+  }
+  const cmpRows=(a,b)=>{ const ka=sikomiSortKey(a),kb=sikomiSortKey(b);
+    return ka[0]-kb[0]||ka[1]-kb[1]||String(a.code).localeCompare(String(b.code)); };
+  newRows.sort(cmpRows);
   /* 既存データの読み込み */
   let cur=null;
   try{ cur=await stGet("kotei-day:"+ds); }
@@ -1438,20 +1453,25 @@ async function importSikomi(buf){
   const dd2=normDay(cur?deepCopy(cur):blankDay());
   const rows0=dd2.blocks[0].rows;
   let added=0,upd=0,kept=0,del=0,same=0;
+  const ryuKind=nm=> nm==="留置昼"||nm==="留置夕" ? nm.slice(2) : null;
   if(!rows0.some(r=>hasProduct(r))){
-    /* まっさらな日: そのまま流し込み + 締切プレ入力 */
-    while(newRows.length<BASE_ROWS) newRows.push(blankRow());
-    dd2.blocks[0].rows=newRows;
-    const items=newRows.filter(r=>hasProduct(r));
+    /* まっさらな日: 取込分+日替わり枠を流し込み + 締切プレ入力 */
+    const all=[...newRows,...dayAdd].sort(cmpRows);
+    while(all.length<BASE_ROWS) all.push(blankRow());
+    dd2.blocks[0].rows=all;
+    const items=all.filter(r=>hasProduct(r));
     if(isHolExt(ds)){ const last=items[items.length-1]; if(last){ last.end="8:30"; last.endMan=true; } }
     else{ const g=items.find(r=>String(r.name).includes("ごはん屋")); if(g){ g.end="9:00"; g.endMan=true; } }
     added=items.length;
   }else{
-    /* 再取込: 手修正(今の値≠前回取込値)は上書きせず確認。並びは崩さない */
-    const findRow=p=> rows0.find(r=>hasProduct(r)&&( p.ryuchi? String(r.name).includes("留置") : String(r.code).trim()===String(p.code).trim() ));
+    /* 再取込: 手修正(今の値≠前回取込値)は上書きせず確認。並びは崩さない。日替わり枠は追加しない */
+    const findRow=nr=>{
+      const ryu=ryuKind(nr.name);
+      const cand=rows0.filter(r=>hasProduct(r)&&( ryu? (String(r.name).includes("留置")&&String(r.name).includes(ryu)) : String(r.code).trim()===String(nr.code).trim() ));
+      return cand.find(r=>r.impQty!==undefined)||cand[0]||null; /* 前回取込の行を優先(同じ番号の日替わり行と区別) */
+    };
     for(const nr of newRows){
-      const p={code:nr.code,ryuchi:nr.name==="留置"};
-      const ex=findRow(p);
+      const ex=findRow(nr);
       if(!ex){ /* 新商品: 並びルールの位置に挿入 */
         const k=sikomiSortKey(nr);
         let pos=-1;
@@ -1474,7 +1494,8 @@ async function importSikomi(buf){
     /* CSVから消えた商品(前回取込で入れたもの) */
     for(let i=rows0.length-1;i>=0;i--){ const r=rows0[i];
       if(!hasProduct(r)||r.impQty===undefined) continue;
-      const still=newRows.some(nr=> nr.name==="留置"? String(r.name).includes("留置") : String(nr.code).trim()===String(r.code).trim());
+      const still=newRows.some(nr=>{ const ryu=ryuKind(nr.name);
+        return ryu? (String(r.name).includes("留置")&&String(r.name).includes(ryu)) : String(nr.code).trim()===String(r.code).trim(); });
       if(!still&&confirm(r.name+": 今回の仕込み表にありません。この行を削除しますか?")){ rows0.splice(i,1); del++; }
     }
     while(rows0.length<BASE_ROWS) rows0.push(blankRow());
