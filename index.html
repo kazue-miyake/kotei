@@ -1253,7 +1253,20 @@ function cellToRole(v,name){
   if(d&&String(d.r1||"").trim()) return {r1:String(d.r1).trim(),r2:String(d.r2||"").trim(),def:true};
   return {noRole:true};
 }
-/* その日の出勤者リスト(Excelの上から順) → シフト枠 */
+/* 盛付ラインの並び順ルール: 先頭(最難)候補 → 上手い順 → 最後は出荷(H)チェック係 */
+const LINE_LEAD=["森山","山本","上中","ローズ"];
+const LINE_SKILL=["山本","上中","松山","ローズ","竹村","林","浦田","山田"];
+const LINE_CHECK=["藤田","見城","青木"];
+function orderPours(pours){
+  const rest=[...pours], checks=[];
+  for(const c of LINE_CHECK){ const i=rest.findIndex(p=>p.name===c); if(i>=0) checks.push(...rest.splice(i,1)); }
+  let lead=null;
+  for(const c of LINE_LEAD){ const i=rest.findIndex(p=>p.name===c); if(i>=0){ lead=rest.splice(i,1)[0]; break; } }
+  const rk=n=>{ const i=LINE_SKILL.indexOf(n); return i<0?99:i; };
+  rest.sort((a,b)=>rk(a.name)-rk(b.name));
+  return (lead?[lead]:[]).concat(rest,checks);
+}
+/* その日の出勤者リスト → シフト枠 */
 function buildAttForDay(list){
   const att=[];
   for(let i=0;i<4;i++) att.push({name:"",r1:FIXED_ROLES[i],r2:"",time:"",timeMan:false,fixed:true});
@@ -1271,8 +1284,9 @@ function buildAttForDay(list){
     if(p.r1==="盛付") pours.push({name:p.name,r1:"盛付",r2:p.r2||"",time:"",timeMan:false,fixed:false,pour:true});
     else extra.push({name:p.name,r1:p.r1,r2:p.r2||"",time:"",timeMan:false,fixed:false,pour:false});
   });
-  while(pours.length<4) pours.push({name:"",r1:"盛付",r2:"",time:"",timeMan:false,fixed:false,pour:true});
-  return att.concat(extra,pours);
+  const ordered=orderPours(pours);
+  while(ordered.length<4) ordered.push({name:"",r1:"盛付",r2:"",time:"",timeMan:false,fixed:false,pour:true});
+  return att.concat(extra,ordered);
 }
 const YOBI="日月火水木金土";
 function sheetInfo(ws){ /* {mon, wd(1日の曜日)} を読む */
