@@ -1431,7 +1431,7 @@ function fixedRow(nm,q,min,ppl2){ /* 型に毎日入る固定行 */
   if(ppl2&&!r.ppl) r.ppl=ppl2;
   return r;
 }
-function dayNote(r){ r.note="日替わり分(朝に数を確認)"; return r; }
+function dayNote(r){ r.note="表で確認"; return r; }
 async function importSikomi(buf){
   const text=new TextDecoder("shift_jis").decode(buf);
   const rows=parseCSV(text);
@@ -1483,7 +1483,6 @@ async function importSikomi(buf){
     const parts=[];
     if(p.qs.length>1||p.kentai) parts.push(p.qs.join("+")+(p.kentai?"+1":"")); /* 注文の内訳(末尾+1=検体) */
     if(p.ori&&p.cust) parts.push(p.cust.replace(/株式会社|\(株\)|㈱/g,"").trim().slice(0,8));
-    if(p.times.size) parts.push("納"+[...p.times][0]+(p.times.size>1?"他":""));
     const mm=[...p.memos].join("／"); if(mm) parts.push(mm.slice(0,30));
     p.note=parts.join(" ");
     if(p.ori) p.orikey="375:"+p.cust;
@@ -1523,8 +1522,7 @@ async function importSikomi(buf){
     if(!hol){
       all.push(fixedRow("日替わり準備","","5"), fixedRow("プチ","","15","5"));
       const g=gohan[0]||fixedRow("ごはん屋弁当","","45","5");
-      g.min="45"; g.end="9:00"; g.endMan=true;
-      g.note=((g.note||"")+" (朝に数を確認)").trim();
+      g.min="45"; g.end="9:00"; g.endMan=true; g.note="";
       all.push(g);
     } else all.push(...gohan);
     all.push(...odv);
