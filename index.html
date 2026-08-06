@@ -42,6 +42,7 @@ input,select{font-family:inherit;font-size:14px;color:var(--ink)}
 .btn:hover{background:var(--soft)}
 .btn.pri{background:var(--navy);color:#fff}
 .btn.warn{border-color:#a33;color:#a33}
+.btn:disabled{opacity:.35;pointer-events:none}
 .chip{background:var(--navy-d);color:#fff;border-radius:4px;padding:5px 12px;font-size:12px;display:inline-flex;gap:8px;align-items:center}
 .chip b{font-family:var(--mono);font-size:16px;letter-spacing:.03em}
 .sep{width:1px;height:22px;background:var(--line)}
@@ -59,6 +60,8 @@ table.attT td select{width:80px;border:none;padding:4px 2px;font-size:13px;backg
 table.attT td.fx{background:#eef2f7}
 table.attT td.oth{background:#e7f3e7}
 table.attT td.nm.oth{background:#d9ecd9}
+table.attT td.chk{background:#e7f3e7}
+table.attT td.nm.chk{background:#d9ecd9}
 .grip{cursor:grab;font-size:13px;color:var(--mut);padding:0 3px;user-select:none;display:inline-block}
 td.rownum{cursor:grab}
 tr.dropTgt td{border-top:2px solid var(--accent)!important}
@@ -76,7 +79,7 @@ table.attT td.ops{border:none;background:transparent;text-align:center}
 
 /* ===== main table ===== */
 .tblwrap{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:6px}
-table.main{border-collapse:collapse;width:100%;min-width:1600px}
+table.main{border-collapse:collapse;width:100%;min-width:1760px}
 table.main th{background:var(--navy);color:#fff;font-size:12px;font-weight:600;padding:4px 3px;border:1px solid #3a5b82;white-space:nowrap;position:sticky;top:0;z-index:2}
 table.main td{border:1px solid #dedbd2;padding:0;height:34px;background:var(--cell)}
 table.main tr:nth-child(even) td{background:#fbfaf7}
@@ -89,9 +92,9 @@ td.calc.auto{color:var(--navy);font-weight:700}
 td.name{min-width:190px}
 td.note{min-width:150px}
 td.sym{width:52px;text-align:center;font-family:var(--mono);font-size:13px;color:var(--mut)}
-td.rice{width:62px}
+td.rice{width:84px}
 td.asg{width:78px;position:relative}
-td.asg select{font-size:13px}
+td.asg input{font-size:13px;text-align:center}
 td.rownum{width:24px;text-align:center;color:var(--mut);font-size:10px;background:#f4f3ef!important}
 td.ops2{width:164px;text-align:center;background:#f4f3ef!important;white-space:nowrap;
   position:sticky;right:0;z-index:1;border-left:2px solid var(--line)!important}
@@ -114,7 +117,7 @@ td.asg:hover .swap{display:block}
 .agrip{position:absolute;left:0;top:0;bottom:0;width:14px;display:flex;align-items:center;justify-content:center;
   cursor:grab;font-size:10px;color:#9aa0a8;background:#f2f1ec;border-right:1px solid #e2dfd6;z-index:2;user-select:none}
 .agrip:hover{color:var(--accent);background:#fdf3ec}
-td.asg select{padding-left:17px}
+td.asg input{padding-left:17px}
 td.asg.dropTgtA{outline:2px dashed var(--accent);outline-offset:-2px}
 .legend{font-size:11px;color:var(--mut);margin-top:6px;line-height:1.7}
 .legend b{color:var(--accent)}
@@ -152,11 +155,13 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
 #printSheet td.c{text-align:center}
 #printSheet td.mono,#printSheet th.mono{font-family:var(--mono)}
 #printSheet table.pmain td.pname{font-size:16pt;white-space:normal;line-height:1.05;font-weight:700}
-#printSheet table.pmain td.pasg{font-size:10pt}
+#printSheet table.pmain td.pasg{font-size:13pt}
 #printSheet table.pmain td.sm10{font-size:10pt}
 #printSheet table.pmain td.big{font-weight:700}
 #printSheet table.pmain td.pnote{white-space:normal;line-height:1.1;font-weight:400}
 #printSheet table.pmain td.sm8{font-size:6pt}
+#printSheet table.pmain td.psec{font-size:14pt}
+#printSheet table.pmain td.pric{white-space:normal;line-height:1.05}
 #printSheet table.pmain th.sm8h{font-size:6pt;white-space:normal;line-height:1.05}
 #printSheet table.pmain td.pmemo{font-size:14pt;font-weight:700;text-align:left;white-space:normal;line-height:1.1;background:#f5f0dc}
 #printSheet table.pmain td.pblkt{font-size:14pt;font-weight:700;text-align:left;background:#d8d8d8;letter-spacing:.1em}
@@ -184,7 +189,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
 <body>
 <div class="app">
 <div class="topbar">
-  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v22 クラウド</span>
+  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v24 クラウド</span>
   <span class="savestat" id="saveStat"></span>
   <button class="btn" id="btnLogout" style="font-size:11px;padding:3px 8px;border-color:#8fa5c0;color:#cfd9e6;background:transparent">ログアウト</button>
   <div class="tabs">
@@ -205,6 +210,9 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
     <select id="savedSel"><option value="">保存済み一覧…</option></select>
     <span class="sep"></span>
     <div class="chip">盛付朝礼 <b id="mornChip">--:--</b></div>
+    <span class="sep"></span>
+    <button class="btn" id="btnUndo" title="直前の変更を取り消す (Ctrl+Z)" disabled>↩ 戻る</button>
+    <button class="btn" id="btnRedo" title="取り消した変更をやり直す (Ctrl+Y)" disabled>↪ 進む</button>
     <span class="sep"></span>
     <label>ひな形</label>
     <select id="tplSel"><option value="">テンプレート一覧…</option></select>
@@ -233,7 +241,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
       <button class="btn" id="btnAttOther">＋ その他の枠を追加</button>
       <button class="btn pri" id="btnShift">シフト表取込(Excel)</button>
       <input type="file" id="shiftFile" accept=".xlsx,.xlsm,.xls" style="display:none">
-      <span class="hint">「シフト表取込」=出勤表Excelを選ぶと1か月分の名前が自動で入ります(名前が入っていない日だけ)。左の4枠は調理・米・唐揚・仕込で固定。出勤時間は朝礼とルール(メンバータブ)から自動(手書き換え可・空欄で自動)。担当は盛付枠の並び順から商品の盛付人数のぶん自動で入ります。緑の「その他の枠」(洗浄・折など)は自動割当に数えません。枠は⠿をつかんでドラッグで移動、「盛/他」ボタンで種類切替</span>
+      <span class="hint">「シフト表取込」=出勤表Excelを選ぶと1か月分の名前が自動で入ります(名前が入っていない日だけ)。左の4枠は調理・米・唐揚・仕込で固定。出勤時間は朝礼とルール(メンバータブ)から自動(手書き換え可・空欄で自動)。担当は盛付枠の並び順から商品の盛付人数のぶん自動で入ります(出勤時間より前に始まる行には入りません。例: 7:00出勤の山本さん・松山さんは7:00以降に始まる行から)。緑の「その他の枠」(洗浄・折など)は自動割当に数えません。緑の「チェック枠」(藤田・見城)は一番右に入り、担当欄では商品の盛付人数とは別に必ず一番うしろに入ります(担当欄は8つ)。枠は⠿をつかんでドラッグで移動、「盛/他/終」ボタンで種類切替(盛=盛付枠・他=自動割当なし・終=一番最後)</span>
     </div>
     <div class="attstrip"><table class="attT" id="attT"></table></div>
   </div>
@@ -248,7 +256,9 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
     ・「<b>並</b>」ボタンで<b>並行作業の行</b>(青)になります。時間の流れから外れるので、他の行と時間が重なってOK(例: 7:00から山本さんが一人でブケAを流す)。開始か終了を手入力すると、もう片方は自動計算されます。担当も自動では入らないので手で選んでください。<br>
     ・<b>予定開始も手入力で上書きできます</b>(オレンジ色になり、その行から上はその時刻でつながります)。「戻」で自動に戻ります。<br>
     ・第2ブロック(厨房さん など)は独立した時刻のつながりを持ちます。担当①~⑥は、シフト表の盛付枠の並びが商品行に自動で入ります(第2ブロックは手動選択)。どこかの行で担当を変えると、その行から下は新しい並びになります。「担」で上の行の並びに戻せます。<br>
-    ・担当セルは<b>Deleteキーで空欄</b>にできます。数字などの欄は<b>Enterで下の行の同じ欄へ</b>移動します。<b>行は左端の番号をつかんでドラッグ</b>でも動かせます。<br>
+    ・担当セルは<b>候補から選ぶだけでなく、名前を直接手入力もできます</b>(登録外の名前もOK)。クリックすると文字が全選択されるので、そのまま打てば上書き、<b>Deleteキーで空欄</b>になります。数字などの欄は<b>Enterで下の行の同じ欄へ</b>移動します。<b>行は左端の番号をつかんでドラッグ</b>でも動かせます。<br>
+    ・<b>「↩ 戻る」「↪ 進む」ボタン(またはCtrl+Z／Ctrl+Y)</b>で、直前の操作の取り消し・やり直しができます(この画面を開いている間のみ。ページを閉じたり再読込すると履歴は消えます)。<br>
+    ・ご飯は商品マスターで<b>「炊込・白・黄」のように複数種</b>を登録できます。印刷では枠に収まるよう自動で文字が小さくなります。<br>
     ・並行行の印刷は、開始・終了の列は空欄になり、商品名の頭に「∥開始→終了」が太字で付きます(本流の時間列が上から順に読めるように)。<br>
     ・出勤時間は朝礼時刻とメンバータブのルールから自動計算(手で書き換え可・空欄に戻すと自動)。担当の自動割当は、盛付枠の並び順から商品の盛付人数のぶん入ります。<br>
     ・担当は<b>出勤時間帯に合わせて自動で入れ替わります</b>。出勤前の行には入らず(例: 6:00出勤の人は6:00より前の行に入らない)、帰り時間(「7:00～9:00」など)を過ぎた行からは外れて次の人が繰り上がります。行の途中で帰り時間になる場合はその行までは入ります。<br>
@@ -256,7 +266,8 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
   </div>
   <datalist id="dlCode"></datalist>
   <datalist id="dlName"></datalist>
-  <datalist id="dlRice"><option value="白"><option value="炊込"><option value="酢飯"><option value="稲荷"><option value="チキン"></datalist>
+  <datalist id="dlRice"><option value="白"><option value="炊込"><option value="酢飯"><option value="稲荷"><option value="チキン"><option value="黄"><option value="炊込・白"><option value="炊込・白・黄"></datalist>
+  <datalist id="dlAsg"></datalist>
   <datalist id="dlRole">
     <option value="調"><option value="米"><option value="盛"><option value="仕"><option value="唐">
     <option value="早洗"><option value="洗浄"><option value="折"><option value="配"><option value="シール">
@@ -276,7 +287,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
     <div class="mrow">
       <input type="text" id="mstFilter" placeholder="検索(番号・記号・商品名)" style="width:240px">
       <button class="btn pri" id="btnMstAdd">＋ 商品を追加</button>
-      <span class="hint">変更は自動保存されます。ご飯の空欄は「白」扱いです。</span>
+      <span class="hint">変更は自動保存されます。ご飯の空欄は「白」扱いです。ご飯は「炊込・白・黄」のように複数種も入力できます(候補から選んでも直接入力してもOK)。</span>
     </div>
     <div style="max-height:70vh;overflow:auto">
       <table class="mst" id="mstT"></table>
@@ -329,8 +340,12 @@ const DEFAULT_DEFROLES = {
  "上中":{r1:"盛付",r2:"折"},"藤田":{r1:"盛付",r2:""},"松山":{r1:"盛付",r2:"配送"},"山田":{r1:"盛付",r2:""},
  "森山":{r1:"盛付",r2:""},"竹村":{r1:"盛付",r2:""},"見城":{r1:"盛付",r2:""},"北村":{r1:"盛付",r2:""},
  "小林":{r1:"盛付",r2:""}};
-const RICE_OPTS = ["","炊込","酢飯","稲荷","チキン","その他"];
-const BASE_ROWS = 20, BASE_ROWS2 = 8, PER_PAGE = 20, NASG = 6, SETUP_SEC = 300, MAX_ROWS = 35;
+/* NASG=担当欄の数。チェック枠(藤田・見城)は盛付人数の外で必ず入るので 6→8 に増やしてある */
+const BASE_ROWS = 20, BASE_ROWS2 = 8, PER_PAGE = 20, NASG = 8, SETUP_SEC = 300, MAX_ROWS = 35;
+/* シフト枠の種別: pour=true→盛付枠(青) / pour=false→その他枠(緑・自動割当なし) / pour=CHK→チェック枠(緑・自動割当は一番最後) */
+const CHK = "chk";
+/* シフト取込のとき自動でチェック枠(緑・一番右)にする人。ここを直せば増減できる */
+const CHECK_MEMBERS = ["藤田","見城"];
 
 let master = [], members = [], rules = {}, defRoles = {}, day = null, curDate = "";
 let storageOK = true;
@@ -447,7 +462,8 @@ async function saveAllNow(){
 }
 let tmDay=null,tmMst=null,tmMem=null;
 function setStat(t,err){ const s=$("saveStat"); s.textContent=t; s.className="savestat"+(err?" err":""); }
-function schedDay(){ if(loadFailed){ setStat("読込失敗のため保存停止中",true); return; }
+function schedDay(){ histCommit();
+  if(loadFailed){ setStat("読込失敗のため保存停止中",true); return; }
   setStat("変更あり…"); clearTimeout(tmDay); tmDay=setTimeout(async()=>{
   if(await stSet("kotei-day:"+curDate,day)){ setStat("保存済み "+new Date().toTimeString().slice(0,5)); refreshSaved(); } },700); }
 function schedMst(){ setStat("変更あり…"); clearTimeout(tmMst); tmMst=setTimeout(async()=>{
@@ -460,6 +476,33 @@ function schedRul(){ setStat("変更あり…"); clearTimeout(tmRul); tmRul=setT
 let tmDrl=null;
 function schedDrl(){ setStat("変更あり…"); clearTimeout(tmDrl); tmDrl=setTimeout(async()=>{
   if(await stSet("kotei-defroles",defRoles)) setStat("保存済み "+new Date().toTimeString().slice(0,5)); },700); }
+
+/* ================= 戻る / 進む (画面を開いている間の履歴。工程表タブのその日のデータが対象) ================= */
+let hist=[], histPos=-1, histT=0, histRestoring=false;
+function histInit(){ hist=[JSON.stringify(day)]; histPos=0; histT=0; updateHistBtns(); }
+function histCommit(){ /* 変更のたびにschedDay経由で呼ばれ、今の状態を履歴に積む */
+  if(histRestoring||!day||histPos<0) return;
+  const s=JSON.stringify(day);
+  if(s===hist[histPos]) return;
+  const now=Date.now();
+  hist.length=histPos+1; /* 取り消した先の「やり直し」履歴は捨てる */
+  if(now-histT<800&&histPos>0){ hist[histPos]=s; } /* 連続した文字入力はひとまとめ */
+  else{ hist.push(s); histPos++; }
+  histT=now;
+  if(hist.length>200){ hist.shift(); histPos--; }
+  updateHistBtns();
+}
+function histApply(){
+  histRestoring=true;
+  day=normDay(JSON.parse(hist[histPos]));
+  ensureAtt(); renderAtt(); rebuild();
+  hist[histPos]=JSON.stringify(day); /* 正規化後の形で持ち直す */
+  histRestoring=false;
+  schedDay(); updateHistBtns();
+}
+function doUndo(){ if(histPos<=0) return; histPos--; histT=0; histApply(); setStat("元に戻しました(保存中…)"); }
+function doRedo(){ if(histPos>=hist.length-1) return; histPos++; histT=0; histApply(); setStat("やり直しました(保存中…)"); }
+function updateHistBtns(){ $("btnUndo").disabled=histPos<=0; $("btnRedo").disabled=histPos>=hist.length-1; }
 
 /* ================= time helpers ================= */
 function pT(s){ if(s==null) return null; s=String(s).trim().replace(/：/g,":").replace(/；/g,":");
@@ -551,7 +594,7 @@ function rowHtml(b,i,r){
     <td class="rice"><input data-f="rice" list="dlRice"></td>
     <td class="num"><input data-f="ppl" inputmode="numeric"></td>`;
   for(let a=0;a<NASG;a++){
-    h+=`<td class="asg"><span class="agrip" draggable="true" data-a="${a}" title="ここをつかんでドラッグで担当を入替">⠿</span><select data-f="asg" data-a="${a}"></select></td>`;
+    h+=`<td class="asg"><span class="agrip" draggable="true" data-a="${a}" title="ここをつかんでドラッグで担当を入替">⠿</span><input data-f="asg" data-a="${a}" list="dlAsg" autocomplete="off" title="候補から選ぶか、名前を直接入力(Deleteキーで空欄)"></td>`;
   }
   h+=`<td class="note"><input data-f="note"></td>
     <td class="ops2">${OPS_BTNS}</td></tr>`;
@@ -560,7 +603,7 @@ function rowHtml(b,i,r){
 function tableHtml(b){
   let h=`<tr><th></th><th>予定<br>開始</th><th>予定<br>終了</th><th>番号</th><th>記号</th><th>商品名</th>
     <th>食数</th><th>検食</th><th>1個当<br>(秒)</th><th>合計<br>所要</th><th>切上分<br>(入力可)</th><th>ご飯</th><th>標準<br>人数</th>`;
-  for(let a=0;a<NASG;a++) h+=`<th>${a===0?"先頭":"盛付"+"①②③④⑤⑥"[a]}</th>`;
+  for(let a=0;a<NASG;a++) h+=`<th>${a===0?"先頭":"盛付"+"①②③④⑤⑥⑦⑧"[a]}</th>`;
   h+=`<th>備考</th><th class="opsh">操作</th></tr>`;
   day.blocks[b].rows.forEach((r,i)=>{ h+=rowHtml(b,i,r); });
   return h;
@@ -598,22 +641,25 @@ function fillAll(){
     q(tr,"qty").value=r.qty; q(tr,"ken").value=r.ken; q(tr,"sec").value=r.sec;
     q(tr,"min").value=r.min; q(tr,"rice").value=r.rice;
     q(tr,"ppl").value=r.ppl; q(tr,"note").value=r.note; q(tr,"symC").textContent=r.sym;
-    for(let a=0;a<NASG;a++) fillAsgSelect(q(tr,"asg",a), r.asg[a]);
+    for(let a=0;a<NASG;a++) q(tr,"asg",a).value=r.asg[a]||"";
   });
   recalc();
 }
 function attNames(){ return day.att.map(a=>a.name).filter(Boolean); }
-function fillAsgSelect(sel,val){
-  const names=attNames().concat(members.filter(m=>!attNames().includes(m)));
-  let h=`<option value=""></option>`;
-  const list=[...names]; if(val&&!list.includes(val)) list.push(val);
-  list.forEach(n=>h+=`<option value="${esc(n)}">${esc(n)}</option>`);
-  sel.innerHTML=h; sel.value=val||"";
+function rebuildAsgDatalist(){ /* 担当欄の候補: 出勤者を先に、続けて残りのメンバー */
+  const an=attNames();
+  const names=an.concat(members.filter(m=>!an.includes(m)));
+  $("dlAsg").innerHTML=names.map(n=>`<option value="${esc(n)}">`).join("");
 }
 function hasProduct(r){ return r.type==="item" && !!(String(r.name).trim()||String(r.code).trim()); }
 function baseAsg(b){ // ブロック①はシフト表の盛付枠(左から)。ブロック②は空(手動)
   if(b>0) return Array(NASG).fill("");
-  const names=day.att.filter(a=>!a.fixed&&a.pour!==false&&a.name).map(a=>a.name).slice(0,NASG);
+  /* 盛付枠(青)を左から。チェック枠(緑・藤田/見城など)は自動割当の一番最後に回す */
+  const pour=[],chk=[];
+  day.att.forEach(a=>{ if(a.fixed||!a.name) return;
+    if(a.pour===CHK) chk.push(a.name); else if(a.pour!==false) pour.push(a.name); });
+  /* ここでは人数を切らない(行ごとに出勤時間で絞ってから必要人数だけ入れるため) */
+  const names=pour.concat(chk);
   while(names.length<NASG) names.push("");
   return names;
 }
@@ -631,13 +677,19 @@ function availWin(a){
 }
 function fitWin(w,s,e){ // 行の時間帯[s,e]にその人がいるか
   if(!w) return true;
-  if(w.from!=null&&e!=null&&e<=w.from) return false; /* まだ出勤前 */
+  if(w.from!=null){
+    /* 出勤時刻より前に始まる行には入れない(例: 7:00出勤の人は7:00以降に始まる行から) */
+    if(s!=null){ if(s<w.from) return false; }
+    else if(e!=null&&e<=w.from) return false;
+  }
   if(w.to!=null&&s!=null&&s>=w.to) return false;     /* もう帰った */
   return true;
 }
 function cascadeAsg(b,times){
   let cur=baseAsg(b);
   const win={}; day.att.forEach(a=>{ if(a.name&&!(a.name in win)) win[a.name]=availWin(a); });
+  /* チェック枠(緑)の人は商品の盛付人数に関係なく、いつも一番うしろに入れる */
+  const chkSet=new Set(day.att.filter(a=>!a.fixed&&a.pour===CHK&&a.name).map(a=>a.name));
   const rows=day.blocks[b].rows;
   for(let i=0;i<rows.length;i++){ const r=rows[i];
     if(!hasProduct(r)) continue;
@@ -648,18 +700,11 @@ function cascadeAsg(b,times){
       /* 行の時間帯にいる人だけを並び順で(帰った人は外れて次の人が繰り上がり) */
       const av=cur.filter(x=>x&&fitWin(win[x],o.start,o.end));
       const n=asgN(r);
-      r.asg=Array(NASG).fill("").map((_,ix)=> ix<n? (av[ix]||""):"");
+      const cks=av.filter(x=>chkSet.has(x));
+      const list=av.filter(x=>!chkSet.has(x)).slice(0,Math.min(n,NASG-cks.length)).concat(cks);
+      r.asg=Array(NASG).fill("").map((_,ix)=> list[ix]||"");
     }
   }
-}
-function refreshAsgOptions(){ // disable duplicates within a row
-  eachTr((tr,b,i,r)=>{
-    if(r.type==="memo") return;
-    const used=r.asg;
-    for(let a=0;a<NASG;a++){ const sel=q(tr,"asg",a);
-      [...sel.options].forEach(op=>{ op.disabled = op.value!=="" && op.value!==used[a] && used.includes(op.value); });
-    }
-  });
 }
 function recalc(){
   const res=computeAll();
@@ -681,12 +726,12 @@ function recalc(){
     minIn.placeholder = (o.r5!=null&&isActive(r)&&manMin(r)==null)? o.r5+"分":"";
     minIn.classList.toggle("man",manMin(r)!=null);
     tr.classList.toggle("manrow",!!r.asgMan);
-    for(let a=0;a<NASG;a++){ const sel=q(tr,"asg",a), v=r.asg[a]||"";
-      if(sel.value!==v){ sel.value=v; if(sel.value!==v){ fillAsgSelect(sel,v); } } }
+    for(let a=0;a<NASG;a++){ const inp=q(tr,"asg",a), v=r.asg[a]||"";
+      if(document.activeElement!==inp&&inp.value!==v) inp.value=v; }
   });
   $("mornChip").textContent = res.morning!=null? fT(res.morning) : "--:--";
   updateAttTimes(res.morning);
-  refreshAsgOptions();
+  rebuildAsgDatalist();
 }
 function bindBlocks(){
   const C=$("blocks");
@@ -698,7 +743,7 @@ function bindBlocks(){
     if(f==="code"||f==="name"){
       // 一時的に空にして候補一覧を全部表示(何もせず離れたら元に戻す)
       e.target.dataset.prev=e.target.value; e.target.value="";
-    } else if(["qty","ken","sec","ppl","end","note","rice","min"].includes(f)) e.target.select();
+    } else if(["qty","ken","sec","ppl","end","note","rice","min","asg"].includes(f)) e.target.select();
   });
   C.addEventListener("focusout",e=>{
     const f=e.target.dataset&&e.target.dataset.f;
@@ -745,7 +790,7 @@ function bindBlocks(){
       const td=e.target.closest("td.asg"), tr=e.target.closest("tr[data-i]");
       if(!td||!tr||+tr.dataset.b!==asgDrag.b||+tr.dataset.i!==asgDrag.i) return;
       e.preventDefault();
-      const sel=td.querySelector('select[data-f="asg"]'); if(!sel) return;
+      const sel=td.querySelector('[data-f="asg"]'); if(!sel) return;
       const to=+sel.dataset.a, r=day.blocks[asgDrag.b].rows[asgDrag.i];
       if(to!==asgDrag.a){
         r.asgMan=true;
@@ -767,13 +812,6 @@ function bindBlocks(){
   C.addEventListener("change",onMainChange);
   C.addEventListener("click",onMainClick);
   C.addEventListener("keydown",e=>{
-    // Delete/Backspaceで担当を空欄に
-    if((e.key==="Delete"||e.key==="Backspace")&&e.target.tagName==="SELECT"&&e.target.dataset.f==="asg"){
-      e.preventDefault();
-      const tr=e.target.closest("tr[data-i]"); if(!tr) return;
-      const r=day.blocks[+tr.dataset.b].rows[+tr.dataset.i];
-      r.asgMan=true; r.asg[+e.target.dataset.a]=""; recalc(); schedDay(); return;
-    }
     // Enterで下の行の同じ欄へ
     if(e.key==="Enter"&&e.target.tagName==="INPUT"){
       e.preventDefault();
@@ -799,6 +837,7 @@ function onMainInput(e){
     const m=findByCode(e.target.value); if(m) applyMaster(tr,r,m);
     recalc(); schedDay(); }
   else if(f==="name"){ r.name=e.target.value; recalc(); schedDay(); }
+  else if(f==="asg"){ const a=+e.target.dataset.a; r.asgMan=true; r.asg[a]=e.target.value; recalc(); schedDay(); }
 }
 function onMainChange(e){
   const tr=e.target.closest("tr[data-i]"); if(!tr) return;
@@ -894,7 +933,9 @@ function ensureAtt(){
   while(day.att.filter(a=>!a.fixed).length<4)
     day.att.push({name:"",r1:"盛付",r2:"",time:"",fixed:false});
   day.att.forEach(a=>{ if(a.timeMan===undefined) a.timeMan=!!String(a.time||"").trim();
-    if(!a.fixed&&a.pour===undefined) a.pour=true; });
+    if(!a.fixed&&a.pour===undefined) a.pour=true;
+    /* 取込済みの日にも反映: 藤田・見城の盛付枠はチェック枠(緑)に。手で種類を変えた枠は触らない */
+    if(!a.fixed&&!a.kindMan&&a.pour===true&&CHECK_MEMBERS.includes(a.name)) a.pour=CHK; });
 }
 /* 出勤時間の自動計算 */
 function ruleTime(rule,morn){
@@ -930,13 +971,13 @@ function renderAtt(){
   const used=day.att.map(a=>a.name).filter(Boolean);
   let r1=`<tr><th>役割(上)</th>`,r2=`<tr><th>役割(下)</th>`,r3=`<tr><th>出勤時間</th>`,r4=`<tr><th>名前</th>`,r5=`<tr><th></th>`;
   day.att.forEach((a,ix)=>{
-    const oth=!a.fixed&&a.pour===false;
-    const cls=a.fixed?` class="fx"`:(oth?` class="oth"`:``);
+    const oth=!a.fixed&&a.pour===false, chk=!a.fixed&&a.pour===CHK;
+    const cls=a.fixed?` class="fx"`:(oth?` class="oth"`:(chk?` class="chk"`:``));
     r1+=`<td${cls} data-ci="${ix}"><input data-ai="${ix}" data-af="r1" list="dlRole" value="${esc(a.r1)}"${oth?' placeholder="役割"':''}></td>`;
     r2+=`<td${cls} data-ci="${ix}"><input data-ai="${ix}" data-af="r2" list="dlRole" value="${esc(a.r2)}"></td>`;
     r3+=`<td${cls} data-ci="${ix}"><input class="tm${a.timeMan?" man":""}" data-ai="${ix}" data-af="time" value="${esc(a.time)}" placeholder="自動/手入力"></td>`;
     const opts=[...members]; if(a.name&&!opts.includes(a.name)) opts.push(a.name);
-    r4+=`<td class="nm${oth?" oth":""}" data-ci="${ix}"><select data-ai="${ix}" data-af="name"><option value="">(空欄)</option>`+
+    r4+=`<td class="nm${oth?" oth":(chk?" chk":"")}" data-ci="${ix}"><select data-ai="${ix}" data-af="name"><option value="">(空欄)</option>`+
         opts.map(n=>`<option value="${esc(n)}"${n===a.name?" selected":""}${(n!==a.name&&used.includes(n))?" disabled":""}>${esc(n)}</option>`).join("")+
         `</select></td>`;
     if(a.fixed){ r5+=`<td class="ops" data-ci="${ix}"></td>`; }
@@ -944,7 +985,7 @@ function renderAtt(){
       r5+=`<td class="ops" data-ci="${ix}"><span class="grip" draggable="true" data-gi="${ix}" title="ドラッグで枠を移動">⠿</span>`+
           `${ix>4?`<button class="mini" data-ai="${ix}" data-af="left" title="左へ">◀</button>`:""}`+
           `${ix<day.att.length-1?`<button class="mini" data-ai="${ix}" data-af="right" title="右へ">▶</button>`:""}`+
-          `<button class="mini" data-ai="${ix}" data-af="kind" title="盛付枠 ⇔ その他枠 切替(「盛」=自動割当に数える)">${oth?"他":"盛"}</button>`+
+          `<button class="mini" data-ai="${ix}" data-af="kind" title="枠の種類を切替: 盛(盛付枠・自動割当) → 他(その他枠・自動割当なし) → 終(チェック枠・自動割当は一番最後)">${oth?"他":(chk?"終":"盛")}</button>`+
           `<button class="mini" data-ai="${ix}" data-af="del" title="枠を削除">✕</button></td>`;
     }
   });
@@ -969,7 +1010,7 @@ function attClick(e){
   const ix=+b.dataset.ai, f=b.dataset.af, arr=day.att;
   if(!arr[ix]||arr[ix].fixed) return;
   if(f==="del"){ arr.splice(ix,1); }
-  else if(f==="kind"){ arr[ix].pour = arr[ix].pour===false; }
+  else if(f==="kind"){ arr[ix].pour = arr[ix].pour===false? CHK : (arr[ix].pour===CHK? true : false); arr[ix].kindMan=true; }
   else if(f==="left"&&ix>4){ [arr[ix-1],arr[ix]]=[arr[ix],arr[ix-1]]; }
   else if(f==="right"&&ix<arr.length-1&&!arr[ix+1].fixed){ [arr[ix+1],arr[ix]]=[arr[ix],arr[ix+1]]; }
   else return;
@@ -986,7 +1027,7 @@ async function loadDay(d,{silent}={}){
   try{ got=await stGet("kotei-day:"+d); }
   catch(e){ loadFailed=true; }
   if(loadFailed){
-    day=blankDay(); ensureAtt(); renderAtt(); rebuild();
+    day=blankDay(); ensureAtt(); renderAtt(); rebuild(); histInit();
     setStat("読込失敗(保存停止中)",true);
     $("storBanner").textContent="クラウドから読み込めませんでした。上書き事故を防ぐため自動保存を止めています。ネット接続を確認して「最新を再読込」を押してください。";
     $("storBanner").style.display="block";
@@ -994,7 +1035,7 @@ async function loadDay(d,{silent}={}){
   }
   day=normDay(got);
   ensureAtt();
-  renderAtt(); rebuild();
+  renderAtt(); rebuild(); histInit();
   $("storBanner").style.display="none";
   if(!silent) setStat(got?"読み込みました":"新規の日付です");
 }
@@ -1052,7 +1093,7 @@ function renderMst(){
       <td><input data-mi="${ix}" data-mf="sym" value="${esc(m.sym)}"></td>
       <td><input data-mi="${ix}" data-mf="name" value="${esc(m.name)}"></td>
       <td><input data-mi="${ix}" data-mf="sec" value="${esc(m.sec)}" inputmode="numeric"></td>
-      <td><select data-mi="${ix}" data-mf="rice">${RICE_OPTS.map(o=>`<option value="${o}"${(m.rice||"")===o?" selected":""}>${o||"白"}</option>`).join("")}</select></td>
+      <td><input data-mi="${ix}" data-mf="rice" value="${esc(m.rice)}" list="dlRice" placeholder="白" title="候補から選ぶか直接入力。「炊込・白・黄」のように複数種もOK"></td>
       <td><input data-mi="${ix}" data-mf="ppl" value="${esc(m.ppl)}" inputmode="numeric"></td>
       <td style="text-align:center"><button class="mini" data-mi="${ix}" data-mf="del">削除</button></td>
     </tr>`;
@@ -1090,11 +1131,13 @@ function buildPrint(){
         `<tr>${day.att.map(a=>`<td class="mono">${esc(a.time)||"&nbsp;"}</td>`).join("")}</tr>`+
         `<tr>${day.att.map(a=>`<td class="pnm">${esc(a.name)||"&nbsp;"}</td>`).join("")}</tr></table>`;
   }
-  const w=["58","58","50","46","200","44","24","20","26","20","50","36","38","38","38","38","38","38",""];
-  const heads=["予定開始","予定終了","時間(実際)","記号","商品名","食数","検食","1個当","合計所要","5分切上","ご飯","人数","先頭","盛付②","盛付③","盛付④","盛付⑤","盛付⑥","備考"];
+  /* 合計1130pt。担当を8列にしたぶん商品名を200→190に詰め、余りが備考(約204pt) */
+  const w=["58","58","50","46","190","44","24","20","26","20","50","36","38","38","38","38","38","38","38","38",""];
+  const heads=["予定開始","予定終了","時間(実際)","記号","商品名","食数","検食","1個当","合計所要","5分切上","ご飯","人数","先頭","盛付②","盛付③","盛付④","盛付⑤","盛付⑥","盛付⑦","盛付⑧","備考"];
   const NCOL=heads.length;
   const nameSize=t=>{ const n=(t||"").length; return n<=24?16:n<=34?13:11; };
   const noteSize=t=>{ const n=(t||"").length; return n<=54?10:n<=93?9:8; };
+  const riceSize=t=>{ const n=(t||"").length; return n<=2?20:n<=6?14:n<=8?11:9; }; /* 複数のご飯(炊込・白・黄など)は折り返して枠に収める */
   const usedRow=r=> r.type==="memo" ? !!String(r.name).trim() : (isActive(r)||!!String(r.note).trim());
   // 印刷する行を1本のリストにする(ブロック2があれば見出し行を挟む)
   const prows=[];
@@ -1133,10 +1176,10 @@ function buildPrint(){
         <td></td>
         <td class="c mono big">${esc(r.sym)}</td>
         <td class="pname" style="font-size:${nameSize(parLbl+r.name)}pt">${parLbl}${esc(r.name)}</td>
-        <td class="c mono big">${esc(r.qty)}</td><td class="c mono sm10">${esc(r.ken)}</td><td class="c mono sm8">${esc(r.sec)}</td>
+        <td class="c mono big">${esc(r.qty)}</td><td class="c mono sm10">${esc(r.ken)}</td><td class="c mono psec">${esc(r.sec)}</td>
         <td class="c mono sm8">${o.tot!=null?fSec(o.tot):""}</td>
         <td class="c mono sm8">${o.r5!=null&&isActive(r)?o.r5+"分":""}</td>
-        <td class="c big">${esc(rice)}</td><td class="c mono big">${esc(r.ppl)}</td>
+        <td class="c big pric" style="font-size:${riceSize(rice)}pt">${esc(rice)}</td><td class="c mono big">${esc(r.ppl)}</td>
         ${r.asg.map(a=>`<td class="c pasg">${esc(a)}</td>`).join("")}
         <td class="pnote" style="font-size:${noteSize(r.note)}pt">${esc(r.note)}</td></tr>`;
     }
@@ -1278,15 +1321,19 @@ function buildAttForDay(list){
       if(fi>=0&&!att[fi].name){ att[fi].name=p.name; att[fi].r2=p.r2||""; p._done=true; }
     });
   });
-  const extra=[],pours=[];
+  const extra=[],pours=[],checks=[];
   list.forEach(p=>{
     if(p._done) return;
-    if(p.r1==="盛付") pours.push({name:p.name,r1:"盛付",r2:p.r2||"",time:"",timeMan:false,fixed:false,pour:true});
+    if(p.r1==="盛付"){
+      /* 藤田・見城などは チェック枠(緑) として一番右に置く。自動割当では一番最後 */
+      const isChk=CHECK_MEMBERS.includes(p.name);
+      (isChk?checks:pours).push({name:p.name,r1:"盛付",r2:p.r2||"",time:"",timeMan:false,fixed:false,pour:isChk?CHK:true});
+    }
     else extra.push({name:p.name,r1:p.r1,r2:p.r2||"",time:"",timeMan:false,fixed:false,pour:false});
   });
   const ordered=orderPours(pours);
-  while(ordered.length<4) ordered.push({name:"",r1:"盛付",r2:"",time:"",timeMan:false,fixed:false,pour:true});
-  return att.concat(extra,ordered);
+  while(ordered.length+checks.length<4) ordered.push({name:"",r1:"盛付",r2:"",time:"",timeMan:false,fixed:false,pour:true});
+  return att.concat(extra,ordered,checks);
 }
 const YOBI="日月火水木金土";
 function sheetInfo(ws){ /* {mon, wd(1日の曜日)} を読む */
@@ -1598,9 +1645,19 @@ $("dateSel").addEventListener("change",e=>{ if(e.target.value) loadDay(e.target.
 $("savedSel").addEventListener("change",e=>{ if(e.target.value) loadDay(e.target.value); });
 $("btnSaveNow").onclick=saveAllNow;
 $("btnReload").onclick=()=>loadDay(curDate);
+$("btnUndo").onclick=doUndo;
+$("btnRedo").onclick=doRedo;
+document.addEventListener("keydown",e=>{
+  if(!(e.ctrlKey||e.metaKey)||e.altKey) return;
+  if(!day||!$("paneK").classList.contains("on")) return; /* 工程表タブ表示中のみ */
+  const k=(e.key||"").toLowerCase();
+  if(k==="z"&&!e.shiftKey){ e.preventDefault(); doUndo(); }
+  else if(k==="y"||(k==="z"&&e.shiftKey)){ e.preventDefault(); doRedo(); }
+});
 $("btnDelDay").onclick=async()=>{
-  if(!confirm(curDate+" の工程表を削除しますか?(元に戻せません。心配な場合は先にバックアップ保存を)")) return;
+  if(!confirm(curDate+" の工程表を削除しますか?(直後なら「↩ 戻る」で復元できます。心配な場合は先にバックアップ保存を)")) return;
   await stDel("kotei-day:"+curDate); day=blankDay(); ensureAtt(); renderAtt(); rebuild(); refreshSaved(); setStat("削除しました");
+  histCommit();
 };
 $("btnCopy").onclick=async()=>{
   const d=prompt("コピー先の日付を入力してください(例 2026-07-03)",curDate);
