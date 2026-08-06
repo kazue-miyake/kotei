@@ -189,7 +189,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
 <body>
 <div class="app">
 <div class="topbar">
-  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v24 クラウド</span>
+  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v24.1 クラウド</span>
   <span class="savestat" id="saveStat"></span>
   <button class="btn" id="btnLogout" style="font-size:11px;padding:3px 8px;border-color:#8fa5c0;color:#cfd9e6;background:transparent">ログアウト</button>
   <div class="tabs">
@@ -708,6 +708,9 @@ function cascadeAsg(b,times){
 }
 function recalc(){
   const res=computeAll();
+  /* 担当を決める前に出勤時間を確定させる。シフト取込直後の日はここが空のままで、
+     先に割当をしてしまうと「7:00～」の人が7時前の行に入ってしまっていた */
+  updateAttTimes(res.morning);
   day.blocks.forEach((_,b)=>cascadeAsg(b,res.blocks[b]));
   eachTr((tr,b,i,r)=>{
     if(r.type==="memo") return;
@@ -730,7 +733,6 @@ function recalc(){
       if(document.activeElement!==inp&&inp.value!==v) inp.value=v; }
   });
   $("mornChip").textContent = res.morning!=null? fT(res.morning) : "--:--";
-  updateAttTimes(res.morning);
   rebuildAsgDatalist();
 }
 function bindBlocks(){
@@ -934,8 +936,9 @@ function ensureAtt(){
     day.att.push({name:"",r1:"盛付",r2:"",time:"",fixed:false});
   day.att.forEach(a=>{ if(a.timeMan===undefined) a.timeMan=!!String(a.time||"").trim();
     if(!a.fixed&&a.pour===undefined) a.pour=true;
-    /* 取込済みの日にも反映: 藤田・見城の盛付枠はチェック枠(緑)に。手で種類を変えた枠は触らない */
-    if(!a.fixed&&!a.kindMan&&a.pour===true&&CHECK_MEMBERS.includes(a.name)) a.pour=CHK; });
+    /* 取込済みの日にも反映: 藤田・見城の盛付枠(と役割H枠)はチェック枠(緑)に。手で種類を変えた枠は触らない */
+    if(!a.fixed&&!a.kindMan&&CHECK_MEMBERS.includes(a.name)
+       &&(a.pour===true||(a.pour===false&&String(a.r1||"").trim()==="H"))) a.pour=CHK; });
 }
 /* 出勤時間の自動計算 */
 function ruleTime(rule,morn){
@@ -956,12 +959,11 @@ function autoTimeText(a,morn){
   return t!=null? fT(t):"";
 }
 function updateAttTimes(morn){
+  /* 画面の有無に関わらず先にデータ側の出勤時間を確定させる(担当の自動割当がこれを見るため) */
+  day.att.forEach(a=>{ if(!a.timeMan) a.time=autoTimeText(a,morn); });
   document.querySelectorAll('#attT input[data-af="time"]').forEach(inp=>{
     const a=day.att[+inp.dataset.ai]; if(!a) return;
-    if(!a.timeMan){
-      a.time = autoTimeText(a,morn);
-      if(document.activeElement!==inp) inp.value=a.time;
-    }
+    if(!a.timeMan&&document.activeElement!==inp) inp.value=a.time;
     inp.classList.toggle("man",!!a.timeMan);
   });
 }
@@ -1324,11 +1326,12 @@ function buildAttForDay(list){
   const extra=[],pours=[],checks=[];
   list.forEach(p=>{
     if(p._done) return;
-    if(p.r1==="盛付"){
-      /* 藤田・見城などは チェック枠(緑) として一番右に置く。自動割当では一番最後 */
-      const isChk=CHECK_MEMBERS.includes(p.name);
-      (isChk?checks:pours).push({name:p.name,r1:"盛付",r2:p.r2||"",time:"",timeMan:false,fixed:false,pour:isChk?CHK:true});
+    /* 藤田・見城などは チェック枠(緑)として一番右に置く。自動割当では一番最後に必ず入る。
+       シフト表で「H」(出荷チェック)になっていても盛付扱いにする */
+    if(CHECK_MEMBERS.includes(p.name)&&(p.r1==="盛付"||p.r1==="H")){
+      checks.push({name:p.name,r1:p.r1,r2:p.r2||"",time:"",timeMan:false,fixed:false,pour:CHK});
     }
+    else if(p.r1==="盛付") pours.push({name:p.name,r1:"盛付",r2:p.r2||"",time:"",timeMan:false,fixed:false,pour:true});
     else extra.push({name:p.name,r1:p.r1,r2:p.r2||"",time:"",timeMan:false,fixed:false,pour:false});
   });
   const ordered=orderPours(pours);
