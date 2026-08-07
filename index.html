@@ -189,7 +189,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
 <body>
 <div class="app">
 <div class="topbar">
-  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v24.1 クラウド</span>
+  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v24.2 クラウド</span>
   <span class="savestat" id="saveStat"></span>
   <button class="btn" id="btnLogout" style="font-size:11px;padding:3px 8px;border-color:#8fa5c0;color:#cfd9e6;background:transparent">ログアウト</button>
   <div class="tabs">
@@ -241,7 +241,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
       <button class="btn" id="btnAttOther">＋ その他の枠を追加</button>
       <button class="btn pri" id="btnShift">シフト表取込(Excel)</button>
       <input type="file" id="shiftFile" accept=".xlsx,.xlsm,.xls" style="display:none">
-      <span class="hint">「シフト表取込」=出勤表Excelを選ぶと1か月分の名前が自動で入ります(名前が入っていない日だけ)。左の4枠は調理・米・唐揚・仕込で固定。出勤時間は朝礼とルール(メンバータブ)から自動(手書き換え可・空欄で自動)。担当は盛付枠の並び順から商品の盛付人数のぶん自動で入ります(出勤時間より前に始まる行には入りません。例: 7:00出勤の山本さん・松山さんは7:00以降に始まる行から)。緑の「その他の枠」(洗浄・折など)は自動割当に数えません。緑の「チェック枠」(藤田・見城)は一番右に入り、担当欄では商品の盛付人数とは別に必ず一番うしろに入ります(担当欄は8つ)。枠は⠿をつかんでドラッグで移動、「盛/他/終」ボタンで種類切替(盛=盛付枠・他=自動割当なし・終=一番最後)</span>
+      <span class="hint">「シフト表取込」=出勤表Excelを選ぶと1か月分の名前が自動で入ります。シフトが変わって同じ月を入れ直したいときは、取込のときに聞かれる「入れ直したい最初の日」に日にちを入れてください(空欄ならすでに名前が入っている日はそのまま)。左の4枠は調理・米・唐揚・仕込で固定。出勤時間は朝礼とルール(メンバータブ)から自動(手書き換え可・空欄で自動)。担当は盛付枠の並び順から商品の盛付人数のぶん自動で入ります(出勤時間より前に始まる行には入りません。例: 7:00出勤の山本さん・松山さんは7:00以降に始まる行から)。緑の「その他の枠」(洗浄・折など)は自動割当に数えません。緑の「チェック枠」(藤田・見城)は一番右に入り、担当欄では商品の盛付人数とは別に必ず一番うしろに入ります(担当欄は8つ)。枠は⠿をつかんでドラッグで移動、「盛/他/終」ボタンで種類切替(盛=盛付枠・他=自動割当なし・終=一番最後)</span>
     </div>
     <div class="attstrip"><table class="attT" id="attT"></table></div>
   </div>
@@ -1382,7 +1382,26 @@ async function importShift(buf,optSheet,optYear){
     else{ const a=prompt("シート「"+sn+"」("+mon+"月)は何年分ですか? 西暦で入力してください。",String(Y)); if(!a) return; year=parseInt(a,10); }
     if(!(year>2000&&year<2100)){ alert("年が正しくありません。"); return; }
   }
-  if(!confirm("シート「"+sn+"」を "+year+"年"+mon+"月分として取り込みます。\n(すでに名前が入っている日は変更しません)\nよろしいですか?")) return;
+  if(!confirm("シート「"+sn+"」を "+year+"年"+mon+"月分として取り込みます。\nよろしいですか?")) return;
+  /* シフトが変わった月を入れ直したいとき用: 何日以降を上書きするか聞く(空欄=上書きしない) */
+  let ovwFrom=null;
+  {
+    const sameMon = (+curDate.slice(0,4)===year && +curDate.slice(5,7)===mon);
+    const def = sameMon? String(+curDate.slice(8,10)) : "";
+    const a=prompt(
+      "すでに名前が入っている日を、シフト表の内容で入れ直しますか?\n\n"+
+      "入れ直したい最初の日を数字で入れてください(例: 15 → "+mon+"月15日以降を入れ直す)。\n"+
+      "空欄のままOKを押すと、名前が入っている日はそのままにします。", def);
+    if(a===null) return; /* キャンセル=取込じたいをやめる */
+    const n=parseInt(String(a).trim(),10);
+    if(String(a).trim()!==""){
+      if(!(n>=1&&n<=31)){ alert("日にちは1～31で入れてください。"); return; }
+      if(!confirm(mon+"月"+n+"日以降は、すでに名前が入っている日も入れ直します。\n"+
+                  "その日の出勤者の手直し(出勤時間の書き換え・枠の並べ替えなど)は消えます。\n"+
+                  "工程表の商品の行は消えません。\n\nよろしいですか?")) return;
+      ovwFrom=n;
+    }
+  }
   /* 人の行を探す(名前列とメンバー登録の照合。登録がない人は無視) */
   const sorted=[...members].sort((a,b)=>b.length-a.length);
   const seen=new Set(), people=[];
@@ -1396,7 +1415,7 @@ async function importShift(buf,optSheet,optYear){
   if(!people.length){ alert("メンバー登録と一致する名前がこのシートに見つかりませんでした。"); return; }
   /* 日ごとに出勤者を組み立てて保存 */
   const dim=new Date(year,mon,0).getDate(), pad=n=>String(n).padStart(2,"0");
-  let done=0,skip=0; const none=new Set(); let touchedCur=false;
+  let done=0,skip=0,redone=0; const none=new Set(); let touchedCur=false;
   setStat("シフト取込中…");
   for(let d=1;d<=dim;d++){
     const col=dayCol[d]; if(col==null) continue;
@@ -1413,8 +1432,12 @@ async function importShift(buf,optSheet,optYear){
     try{ cur=await stGet("kotei-day:"+ds); }
     catch(e){ alert("クラウドに接続できず中断しました。"+ds+"以降は取り込めていません。"); break; }
     const dd=normDay(cur?deepCopy(cur):blankDay());
-    if(dd.att.some(a=>a&&String(a.name||"").trim())){ skip++; continue; } /* 上書きしない */
-    dd.att=buildAttForDay(list);
+    if(dd.att.some(a=>a&&String(a.name||"").trim())){
+      /* すでに名前が入っている日。指定した日より前はそのまま、以降は入れ直す */
+      if(ovwFrom==null||d<ovwFrom){ skip++; continue; }
+      redone++;
+    }
+    dd.att=buildAttForDay(list); /* 出勤者の枠だけ入れ替え。商品の行(dd.blocks)は触らない */
     if(!(await stSet("kotei-day:"+ds,dd))){ alert("保存に失敗し中断しました("+ds+")。"); break; }
     if(ds===curDate) touchedCur=true;
     done++;
@@ -1423,6 +1446,7 @@ async function importShift(buf,optSheet,optYear){
   if(touchedCur) await loadDay(curDate,{silent:true});
   setStat("シフト取込完了");
   let msg=year+"年"+mon+"月分: "+done+"日分の出勤者を入れました。";
+  if(redone) msg+="\nそのうち入れ直した日: "+redone+"日("+mon+"月"+ovwFrom+"日以降)";
   if(skip) msg+="\nそのままにした日: "+skip+"日(すでに名前が入っていたため)";
   if(none.size) msg+="\n基本役割が未登録のため入れられなかった人: "+[...none].join("、")+"\n→ メンバータブで基本役割を登録してから、もう一度取り込むと入ります。";
   alert(msg);
