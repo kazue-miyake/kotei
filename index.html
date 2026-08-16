@@ -103,6 +103,14 @@ td.ops2 .mini:hover{background:var(--soft);border-color:var(--navy)}
 table.main th.opsh{position:sticky;right:0;z-index:3;border-left:2px solid #3a5b82}
 tr.manrow td.asg{background:#fdf3ec!important}
 tr.manrow .mini.asgr{color:var(--accent);border-color:var(--accent)}
+/* 盛付の必要人数に足りない行 */
+td.asg.need{background:#fdeaea!important;box-shadow:inset 0 0 0 2px #c62828}
+tr.short td.rownum{color:#c62828;font-weight:700}
+tr.short td.rownum::after{content:"−" attr(data-short);display:block;font-size:9px}
+.chip.warn2{background:#c62828}
+/* 自動で入れたメモ行(盛付から外した記録)。手で書き換えると普通のメモ行になる */
+tr.memoRow.autoMemo td{background:#eef3fb!important}
+tr.memoRow.autoMemo input{color:var(--navy)}
 input.man{color:var(--accent);font-weight:700}
 tr.memoRow td{background:var(--memo)!important}
 tr.parRow td{background:#e8f0f7!important}
@@ -189,7 +197,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
 <body>
 <div class="app">
 <div class="topbar">
-  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v24.2 クラウド</span>
+  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v25 クラウド</span>
   <span class="savestat" id="saveStat"></span>
   <button class="btn" id="btnLogout" style="font-size:11px;padding:3px 8px;border-color:#8fa5c0;color:#cfd9e6;background:transparent">ログアウト</button>
   <div class="tabs">
@@ -210,6 +218,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
     <select id="savedSel"><option value="">保存済み一覧…</option></select>
     <span class="sep"></span>
     <div class="chip">盛付朝礼 <b id="mornChip">--:--</b></div>
+    <div class="chip warn2" id="shortChip" style="display:none" title="盛付の必要人数に足りていない行があります。担当欄の赤い枠が足りないところです"></div>
     <span class="sep"></span>
     <button class="btn" id="btnUndo" title="直前の変更を取り消す (Ctrl+Z)" disabled>↩ 戻る</button>
     <button class="btn" id="btnRedo" title="取り消した変更をやり直す (Ctrl+Y)" disabled>↪ 進む</button>
@@ -241,7 +250,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
       <button class="btn" id="btnAttOther">＋ その他の枠を追加</button>
       <button class="btn pri" id="btnShift">シフト表取込(Excel)</button>
       <input type="file" id="shiftFile" accept=".xlsx,.xlsm,.xls" style="display:none">
-      <span class="hint">「シフト表取込」=出勤表Excelを選ぶと1か月分の名前が自動で入ります。シフトが変わって同じ月を入れ直したいときは、取込のときに聞かれる「入れ直したい最初の日」に日にちを入れてください(空欄ならすでに名前が入っている日はそのまま)。左の4枠は調理・米・唐揚・仕込で固定。出勤時間は朝礼とルール(メンバータブ)から自動(手書き換え可・空欄で自動)。担当は盛付枠の並び順から商品の盛付人数のぶん自動で入ります(出勤時間より前に始まる行には入りません。例: 7:00出勤の山本さん・松山さんは7:00以降に始まる行から)。緑の「その他の枠」(洗浄・折など)は自動割当に数えません。緑の「チェック枠」(藤田・見城)は一番右に入り、担当欄では商品の盛付人数とは別に必ず一番うしろに入ります(担当欄は8つ)。枠は⠿をつかんでドラッグで移動、「盛/他/終」ボタンで種類切替(盛=盛付枠・他=自動割当なし・終=一番最後)</span>
+      <span class="hint">「シフト表取込」=出勤表Excelを選ぶと1か月分の名前が自動で入ります。シフトが変わって同じ月を入れ直したいときは、取込のときに聞かれる「入れ直したい最初の日」に日にちを入れてください(空欄ならすでに名前が入っている日はそのまま)。左の4枠は調理・米・唐揚・仕込で固定。出勤時間は朝礼とルール(メンバータブ)から自動(手書き換え可・空欄で自動)。担当は盛付枠の並び順から商品の盛付人数のぶん自動で入ります(出勤時間より前に始まる行には入りません。例: 7:00出勤の山本さん・松山さんは7:00以降に始まる行から)。緑の「その他の枠」(洗浄・折など)は自動割当に数えません。緑の「チェック枠」(藤田・見城)は一番右に入り、担当欄では必ず一番うしろに入ります(盛付人数のうちに数えます。担当欄は8つ)。人が余る日は 林→洗浄・上中→折・森山→洗浄 の順で盛付から外し、「7:05 林洗浄」のようなメモ行が自動で入ります(そのメモを手で書き換えると、以後は自動で消えない手書きメモになります)。人が足りない行は担当欄が赤い枠になり、上に「人数不足 ◯行」と出ます(名前は入りません。誰を入れるかは手で決めてください)。枠は⠿をつかんでドラッグで移動、「盛/他/終」ボタンで種類切替(盛=盛付枠・他=自動割当なし・終=一番最後)</span>
     </div>
     <div class="attstrip"><table class="attT" id="attT"></table></div>
   </div>
@@ -346,8 +355,17 @@ const BASE_ROWS = 20, BASE_ROWS2 = 8, PER_PAGE = 20, NASG = 8, SETUP_SEC = 300, 
 const CHK = "chk";
 /* シフト取込のとき自動でチェック枠(緑・一番右)にする人。ここを直せば増減できる */
 const CHECK_MEMBERS = ["藤田","見城"];
+/* 盛付の人が必要人数より多いとき、この順に盛付から外して別の仕事へ回す。
+   一度外れた人はその日の以降の行でも外れたまま。名前を足したい・順番を変えたいときはここを直す */
+const RELEASE_ORDER = [
+  {name:"林",   to:"洗浄"},
+  {name:"上中", to:"折"},
+  {name:"森山", to:"洗浄"},
+];
 
 let master = [], members = [], rules = {}, defRoles = {}, day = null, curDate = "";
+/* 直前のrecalcの結果: releases=盛付から外した人 / short=必要人数に足りない行("ブロック:行"→不足数) */
+let asgInfo = {releases:[], short:new Map()};
 let storageOK = true;
 
 const $ = id => document.getElementById(id);
@@ -371,6 +389,7 @@ function normDay(d){
     while(b.rows.length<minR) b.rows.push(blankRow());
     b.rows.forEach(r=>{
       if(r.type!=="memo") r.type="item";
+      if(r.type!=="memo") delete r.auto; /* 自動メモ印はメモ行だけのもの */
       if(r.min===undefined||r.min===null) r.min="";
       if(r.start===undefined||r.start===null) r.start="";
       if(r.startMan===undefined) r.startMan=false;
@@ -462,10 +481,20 @@ async function saveAllNow(){
 }
 let tmDay=null,tmMst=null,tmMem=null;
 function setStat(t,err){ const s=$("saveStat"); s.textContent=t; s.className="savestat"+(err?" err":""); }
-function schedDay(){ histCommit();
+function schedDay(){ histCommit(); schedAutoMemo();
   if(loadFailed){ setStat("読込失敗のため保存停止中",true); return; }
   setStat("変更あり…"); clearTimeout(tmDay); tmDay=setTimeout(async()=>{
   if(await stSet("kotei-day:"+curDate,day)){ setStat("保存済み "+new Date().toTimeString().slice(0,5)); refreshSaved(); } },700); }
+/* 自動メモ行の入れ直しは行が増減するので、入力が止まってから動かす */
+let tmMemo=null;
+function schedAutoMemo(){
+  clearTimeout(tmMemo);
+  tmMemo=setTimeout(()=>{
+    const ae=document.activeElement;
+    if(ae&&ae.closest&&ae.closest("#blocks")){ schedAutoMemo(); return; } /* まだ入力中なのであとまわし */
+    if(syncAutoMemos()){ rebuild(); schedDay(); }
+  },800);
+}
 function schedMst(){ setStat("変更あり…"); clearTimeout(tmMst); tmMst=setTimeout(async()=>{
   if(await stSet("kotei-master",master)) setStat("保存済み "+new Date().toTimeString().slice(0,5)); },700); }
 function schedMem(){ setStat("変更あり…"); clearTimeout(tmMem); tmMem=setTimeout(async()=>{
@@ -572,9 +601,9 @@ const OPS_BTNS = `<button class="mini" data-f="ins" title="この行の上に1�
 
 function rowHtml(b,i,r){
   if(r.type==="memo"){
-    return `<tr data-b="${b}" data-i="${i}" class="memoRow">
+    return `<tr data-b="${b}" data-i="${i}" class="memoRow${r.auto?" autoMemo":""}">
       <td class="rownum" draggable="true" title="ドラッグで行を移動">${i+1}</td><td class="tm"></td><td class="tm"></td>
-      <td colspan="${10+NASG}" class="memoTd"><input data-f="name" placeholder="メモ・指示(時間計算には入りません。印刷では横長の太字で出ます)"></td>
+      <td colspan="${10+NASG}" class="memoTd"><input data-f="name" placeholder="メモ・指示(時間計算には入りません。印刷では横長の太字で出ます)"${r.auto?' title="盛付の人数調整で自動で入ったメモです。書き換えると手書きメモになり、以後は自動で消えません"':''}></td>
       <td class="ops2">${OPS_BTNS}</td></tr>`;
   }
   let h=`<tr data-b="${b}" data-i="${i}">
@@ -669,11 +698,16 @@ function asgN(r){ // 自動で入れる人数 = 商品の盛付人数(空欄な�
 }
 /* シフト枠の出勤時間 → いられる時間帯 {from,to}(分)。"7:00～9:00"=両方 / "5:20"=開始のみ */
 function availWin(a){
-  const s=String(a.time||"").trim().replace(/：/g,":");
+  /* 手入力で「７：００～10：00１０：００」のように崩れていても読めるように、
+     全角を直したうえで時刻らしいところを拾う(拾えないと時間の絞り込みが効かなくなるため) */
+  const s=String(a.time||"").trim()
+    .replace(/[０-９]/g,c=>"0123456789"["０１２３４５６７８９".indexOf(c)])
+    .replace(/：/g,":");
   if(!s) return {from:null,to:null};
-  const m=s.match(/^(\d{1,2}:\d{2})\s*[～~\-]\s*(\d{1,2}:\d{2})$/);
-  if(m) return {from:pT(m[1]),to:pT(m[2])};
-  return {from:pT(s),to:null};
+  const ms=s.match(/\d{1,2}:\d{2}/g);
+  if(!ms||!ms.length) return {from:null,to:null};
+  if(ms.length>=2&&/[～~]/.test(s)) return {from:pT(ms[0]),to:pT(ms[1])};
+  return {from:pT(ms[0]),to:null};
 }
 function fitWin(w,s,e){ // 行の時間帯[s,e]にその人がいるか
   if(!w) return true;
@@ -691,27 +725,56 @@ function cascadeAsg(b,times){
   /* チェック枠(緑)の人は商品の盛付人数に関係なく、いつも一番うしろに入れる */
   const chkSet=new Set(day.att.filter(a=>!a.fixed&&a.pour===CHK&&a.name).map(a=>a.name));
   const rows=day.blocks[b].rows;
+  const released=new Set();               /* 盛付から外して別の仕事へ回した人(その日はもう戻らない) */
+  const out={releases:[],short:new Map()};
+  /* その行から下で一番多く要る人数。1つの短い行のためだけに人を外してしまわないようにする */
+  const needAfter=Array(rows.length).fill(0);
+  { let mx=0;
+    for(let i=rows.length-1;i>=0;i--){
+      if(hasProduct(rows[i])&&!rows[i].par) mx=Math.max(mx,asgN(rows[i]));
+      needAfter[i]=mx;
+    } }
   for(let i=0;i<rows.length;i++){ const r=rows[i];
     if(!hasProduct(r)) continue;
     if(r.par) continue; // 並行行は自動割当も下への引き継ぎもしない
-    if(r.asgMan){ cur=[...r.asg]; while(cur.length<NASG) cur.push(""); }
+    if(r.asgMan){ cur=[...r.asg]; while(cur.length<NASG) cur.push("");
+      cur.forEach(x=>{ if(x) released.delete(x); }); /* 手で入れ直した人は戻す */
+    }
     else{
       const o=(times&&times[i])||{start:null,end:null};
       /* 行の時間帯にいる人だけを並び順で(帰った人は外れて次の人が繰り上がり) */
       const av=cur.filter(x=>x&&fitWin(win[x],o.start,o.end));
       const n=asgN(r);
+      /* チェック枠(藤田・見城)も必要人数のうちに数える。残りを盛付枠の人で埋める */
       const cks=av.filter(x=>chkSet.has(x));
-      const list=av.filter(x=>!chkSet.has(x)).slice(0,Math.min(n,NASG-cks.length)).concat(cks);
+      const cap=Math.max(0,Math.min(n,NASG)-cks.length);
+      const mains=av.filter(x=>!chkSet.has(x)&&!released.has(x));
+      /* この先ずっと余る人だけ RELEASE_ORDER の順に外す(外した記録はメモ行のもとになる) */
+      while(mains.length+cks.length>needAfter[i]){
+        const hit=RELEASE_ORDER.find(x=>mains.includes(x.name));
+        if(!hit) break;
+        released.add(hit.name);
+        mains.splice(mains.indexOf(hit.name),1);
+        out.releases.push({b,i,name:hit.name,to:hit.to,start:o.start});
+      }
+      const list=mains.slice(0,cap).concat(cks).slice(0,NASG);
+      if(list.length<n) out.short.set(i,n-list.length);
       r.asg=Array(NASG).fill("").map((_,ix)=> list[ix]||"");
     }
   }
+  return out;
 }
 function recalc(){
   const res=computeAll();
   /* 担当を決める前に出勤時間を確定させる。シフト取込直後の日はここが空のままで、
      先に割当をしてしまうと「7:00～」の人が7時前の行に入ってしまっていた */
   updateAttTimes(res.morning);
-  day.blocks.forEach((_,b)=>cascadeAsg(b,res.blocks[b]));
+  asgInfo={releases:[],short:new Map()};
+  day.blocks.forEach((_,b)=>{
+    const o=cascadeAsg(b,res.blocks[b]);
+    asgInfo.releases.push(...o.releases);
+    o.short.forEach((v,i)=>asgInfo.short.set(b+":"+i,v));
+  });
   eachTr((tr,b,i,r)=>{
     if(r.type==="memo") return;
     const o=res.blocks[b][i];
@@ -729,11 +792,51 @@ function recalc(){
     minIn.placeholder = (o.r5!=null&&isActive(r)&&manMin(r)==null)? o.r5+"分":"";
     minIn.classList.toggle("man",manMin(r)!=null);
     tr.classList.toggle("manrow",!!r.asgMan);
+    /* 盛付の必要人数に足りない行に印を付ける(名前は入れない。誰を入れるかは手で決める) */
+    const sh=asgInfo.short.get(b+":"+i)||0, need=asgN(r);
+    tr.classList.toggle("short",sh>0);
+    const rn=tr.querySelector("td.rownum"); if(rn) rn.dataset.short= sh>0? String(sh):"";
     for(let a=0;a<NASG;a++){ const inp=q(tr,"asg",a), v=r.asg[a]||"";
-      if(document.activeElement!==inp&&inp.value!==v) inp.value=v; }
+      if(document.activeElement!==inp&&inp.value!==v) inp.value=v;
+      inp.parentElement.classList.toggle("need", sh>0&&!v&&a<need); }
   });
   $("mornChip").textContent = res.morning!=null? fT(res.morning) : "--:--";
+  const nsh=asgInfo.short.size;
+  $("shortChip").style.display = nsh? "inline-flex":"none";
+  $("shortChip").textContent = nsh? "人数不足 "+nsh+"行" : "";
   rebuildAsgDatalist();
+}
+/* ================= 盛付から外した人のメモ行(自動) =================
+   auto:true のメモ行は毎回いったん全部外してから入れ直す(重複しない)。
+   行が増減するので入力中には動かさない(入力が止まってから schedDay 経由で呼ぶ)。 */
+function autoMemoKey(){
+  return JSON.stringify(day.blocks.map(b=>b.rows.map(r=>(r.type==="memo"&&r.auto)?("A"+r.name):"")));
+}
+function syncAutoMemos(){
+  if(!day) return false;
+  const before=autoMemoKey();
+  /* 1. いまの自動メモを全部はずす */
+  day.blocks.forEach(b=>{ b.rows=b.rows.filter(r=>!(r.type==="memo"&&r.auto)); });
+  /* 2. その状態で「誰をいつ外すか」を計算しなおす(行番号をずらさないため) */
+  const res=computeAll();
+  updateAttTimes(res.morning);
+  const rels=[];
+  day.blocks.forEach((_,b)=>rels.push(...cascadeAsg(b,res.blocks[b]).releases));
+  /* 3. 下の行から入れる(上から入れると下の行番号がずれる) */
+  let room=MAX_ROWS-totalRows();
+  rels.sort((x,y)=> (y.b-x.b)||(y.i-x.i)).forEach(rel=>{
+    if(room<=0) return;
+    const rows=day.blocks[rel.b].rows;
+    /* すでに手で「林洗浄」のように書いてあれば二重に入れない */
+    if(rows.some(r=>r.type==="memo"&&!r.auto&&String(r.name||"").includes(rel.name)&&String(r.name||"").includes(rel.to))) return;
+    const m=blankRow(); m.type="memo"; m.auto=true;
+    m.name=(rel.start!=null? fT(rel.start)+" ":"")+rel.name+rel.to;
+    rows.splice(rel.i,0,m); room--;
+  });
+  /* 4. 行数が基本より少なくなっていたら末尾を足しておく */
+  day.blocks.forEach((b,bi)=>{ const minR= bi===0?BASE_ROWS:BASE_ROWS2;
+    while(b.rows.length<minR) b.rows.push(blankRow()); });
+  return before!==autoMemoKey();
 }
 function bindBlocks(){
   const C=$("blocks");
@@ -830,7 +933,8 @@ function onMainInput(e){
   if(bf==="title"){ day.blocks[+e.target.dataset.bb].title=e.target.value; schedDay(); return; }
   const tr=e.target.closest("tr[data-i]"); if(!tr) return;
   const b=+tr.dataset.b, i=+tr.dataset.i, r=day.blocks[b].rows[i], f=e.target.dataset.f;
-  if(r.type==="memo"){ if(f==="name"){ r.name=e.target.value; schedDay(); } return; }
+  if(r.type==="memo"){ if(f==="name"){ r.name=e.target.value; delete r.auto; /* 手で直したら手書きメモになる */
+    e.target.closest("tr").classList.remove("autoMemo"); schedDay(); } return; }
   if(["qty","ken","sec","note","rice"].includes(f)){ r[f]=e.target.value; if(f==="qty"||f==="sec") recalc(); schedDay(); }
   else if(f==="min"){ r.min=e.target.value; recalc(); schedDay(); }
   else if(f==="end"){ r.end=e.target.value; r.endMan = e.target.value.trim()!==""; recalc(); schedDay(); }
@@ -898,6 +1002,7 @@ function onMainClick(e){
     [r.asg[a],r.asg[a+1]]=[r.asg[a+1],r.asg[a]];
     recalc(); schedDay(); }
   else if(f==="memo"){ const r=rows[i];
+    delete r.auto; /* 手で切り替えたら自動あつかいをやめる */
     if(r.type==="memo"){ r.type="item"; }
     else{
       if((String(r.code).trim()||String(r.qty).trim())&&!confirm("この行をメモ行にすると、番号・食数などは印刷されなくなります(データは残ります)。よろしいですか?")) return;
@@ -1037,7 +1142,9 @@ async function loadDay(d,{silent}={}){
   }
   day=normDay(got);
   ensureAtt();
-  renderAtt(); rebuild(); histInit();
+  renderAtt(); rebuild();
+  if(syncAutoMemos()) rebuild();   /* 盛付から外した人のメモ行を入れ直す */
+  histInit();
   $("storBanner").style.display="none";
   if(!silent) setStat(got?"読み込みました":"新規の日付です");
 }
