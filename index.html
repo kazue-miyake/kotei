@@ -197,7 +197,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
 <body>
 <div class="app">
 <div class="topbar">
-  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v25 クラウド</span>
+  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v26 クラウド</span>
   <span class="savestat" id="saveStat"></span>
   <button class="btn" id="btnLogout" style="font-size:11px;padding:3px 8px;border-color:#8fa5c0;color:#cfd9e6;background:transparent">ログアウト</button>
   <div class="tabs">
@@ -271,6 +271,8 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
     ・並行行の印刷は、開始・終了の列は空欄になり、商品名の頭に「∥開始→終了」が太字で付きます(本流の時間列が上から順に読めるように)。<br>
     ・出勤時間は朝礼時刻とメンバータブのルールから自動計算(手で書き換え可・空欄に戻すと自動)。担当の自動割当は、盛付枠の並び順から商品の盛付人数のぶん入ります。<br>
     ・担当は<b>出勤時間帯に合わせて自動で入れ替わります</b>。出勤前の行には入らず(例: 6:00出勤の人は6:00より前の行に入らない)、帰り時間(「7:00～9:00」など)を過ぎた行からは外れて次の人が繰り上がります。行の途中で帰り時間になる場合はその行までは入ります。<br>
+    ・役割が<b>H(出荷チェック)</b>の枠の人は、商品の盛付人数に関係なく<b>いつも担当のいちばん右の升</b>に入ります(コンベアの最後でチェックする係のため)。<br>
+    ・人が余ったときに自動で入る<b>青いメモ行</b>(「6:00 林洗浄」など)は、<b>手で直す・消す・動かすことができます</b>。手を入れるとその人の分はその日もう自動では出てきません。<br>
     ・行数の目安は全体で35行まで(超えると注意が出ます)。21行を超えると印刷は自動で2枚目に続きます。
   </div>
   <datalist id="dlCode"></datalist>
@@ -353,8 +355,11 @@ const DEFAULT_DEFROLES = {
 const BASE_ROWS = 20, BASE_ROWS2 = 8, PER_PAGE = 20, NASG = 8, SETUP_SEC = 300, MAX_ROWS = 35;
 /* シフト枠の種別: pour=true→盛付枠(青) / pour=false→その他枠(緑・自動割当なし) / pour=CHK→チェック枠(緑・自動割当は一番最後) */
 const CHK = "chk";
-/* シフト取込のとき自動でチェック枠(緑・一番右)にする人。ここを直せば増減できる */
+/* シフト取込のとき自動でチェック枠(緑・一番右)にする人。ここを直せば増減できる
+   ※シフト表で「H」の人は、ここに無くても自動でチェック枠になる */
 const CHECK_MEMBERS = ["藤田","見城"];
+/* シフト表の記号に関係なく、必ず盛付枠に入れる人(7:00出勤で盛付に入るため) */
+const FORCE_POUR = ["松山","山本"];
 /* 盛付の人が必要人数より多いとき、この順に盛付から外して別の仕事へ回す。
    一度外れた人はその日の以降の行でも外れたまま。名前を足したい・順番を変えたいときはここを直す */
 const RELEASE_ORDER = [
@@ -389,7 +394,7 @@ function normDay(d){
     while(b.rows.length<minR) b.rows.push(blankRow());
     b.rows.forEach(r=>{
       if(r.type!=="memo") r.type="item";
-      if(r.type!=="memo") delete r.auto; /* 自動メモ印はメモ行だけのもの */
+      if(r.type!=="memo"){ delete r.auto; delete r.rel; } /* 自動メモ印はメモ行だけのもの */
       if(r.min===undefined||r.min===null) r.min="";
       if(r.start===undefined||r.start===null) r.start="";
       if(r.startMan===undefined) r.startMan=false;
@@ -400,6 +405,7 @@ function normDay(d){
     });
   });
   if(!Array.isArray(d.att)) d.att=[];
+  if(!Array.isArray(d.memoOff)) d.memoOff=[]; /* 自動メモを出さない人(手で消した・直した人) */
   return d;
 }
 function totalRows(){ return day.blocks.reduce((s,b)=>s+b.rows.length,0); }
@@ -681,12 +687,17 @@ function rebuildAsgDatalist(){ /* 担当欄の候補: 出勤者を先に、続�
   $("dlAsg").innerHTML=names.map(n=>`<option value="${esc(n)}">`).join("");
 }
 function hasProduct(r){ return r.type==="item" && !!(String(r.name).trim()||String(r.code).trim()); }
+/* チェック枠(出荷H)か? = 枠の種類がチェック、または役割にHと書いてある枠 */
+function isChkAtt(a){
+  if(!a||a.fixed||!a.name) return false;
+  return a.pour===CHK || /^[HＨ]$/.test(String(a.r1||"").trim()) || /^[HＨ]$/.test(String(a.r2||"").trim());
+}
 function baseAsg(b){ // ブロック①はシフト表の盛付枠(左から)。ブロック②は空(手動)
   if(b>0) return Array(NASG).fill("");
-  /* 盛付枠(青)を左から。チェック枠(緑・藤田/見城など)は自動割当の一番最後に回す */
+  /* 盛付枠(青)を左から。チェック枠(H・藤田/見城など)は担当のいちばん最後の升へ */
   const pour=[],chk=[];
   day.att.forEach(a=>{ if(a.fixed||!a.name) return;
-    if(a.pour===CHK) chk.push(a.name); else if(a.pour!==false) pour.push(a.name); });
+    if(isChkAtt(a)) chk.push(a.name); else if(a.pour!==false) pour.push(a.name); });
   /* ここでは人数を切らない(行ごとに出勤時間で絞ってから必要人数だけ入れるため) */
   const names=pour.concat(chk);
   while(names.length<NASG) names.push("");
@@ -722,8 +733,8 @@ function fitWin(w,s,e){ // 行の時間帯[s,e]にその人がいるか
 function cascadeAsg(b,times){
   let cur=baseAsg(b);
   const win={}; day.att.forEach(a=>{ if(a.name&&!(a.name in win)) win[a.name]=availWin(a); });
-  /* チェック枠(緑)の人は商品の盛付人数に関係なく、いつも一番うしろに入れる */
-  const chkSet=new Set(day.att.filter(a=>!a.fixed&&a.pour===CHK&&a.name).map(a=>a.name));
+  /* チェック枠(出荷H)の人は商品の盛付人数に関係なく、いつも担当のいちばん最後の升 */
+  const chkSet=new Set(day.att.filter(isChkAtt).map(a=>a.name));
   const rows=day.blocks[b].rows;
   const released=new Set();               /* 盛付から外して別の仕事へ回した人(その日はもう戻らない) */
   const out={releases:[],short:new Map()};
@@ -745,7 +756,7 @@ function cascadeAsg(b,times){
       /* 行の時間帯にいる人だけを並び順で(帰った人は外れて次の人が繰り上がり) */
       const av=cur.filter(x=>x&&fitWin(win[x],o.start,o.end));
       const n=asgN(r);
-      /* チェック枠(藤田・見城)も必要人数のうちに数える。残りを盛付枠の人で埋める */
+      /* チェック枠(H)も必要人数のうちに数える。ただし表示はいつも担当のいちばん最後の升 */
       const cks=av.filter(x=>chkSet.has(x));
       const cap=Math.max(0,Math.min(n,NASG)-cks.length);
       const mains=av.filter(x=>!chkSet.has(x)&&!released.has(x));
@@ -757,9 +768,17 @@ function cascadeAsg(b,times){
         mains.splice(mains.indexOf(hit.name),1);
         out.releases.push({b,i,name:hit.name,to:hit.to,start:o.start});
       }
-      const list=mains.slice(0,cap).concat(cks).slice(0,NASG);
-      if(list.length<n) out.short.set(i,n-list.length);
-      r.asg=Array(NASG).fill("").map((_,ix)=> list[ix]||"");
+      const list=mains.slice(0,cap);
+      if(list.length+cks.length<n) out.short.set(i,n-list.length-cks.length);
+      const asg=Array(NASG).fill("");
+      list.forEach((x,ix)=>{ if(ix<NASG) asg[ix]=x; });
+      /* チェック係(コンベアの最後でチェックする係)は右端の升に固定。盛付の人と重なるときはその右へ */
+      cks.slice(0,NASG).forEach((x,k)=>{
+        let p=NASG-cks.length+k;
+        if(p<list.length) p=list.length+k;
+        if(p<NASG) asg[p]=x;
+      });
+      r.asg=asg;
     }
   }
   return out;
@@ -809,11 +828,20 @@ function recalc(){
 /* ================= 盛付から外した人のメモ行(自動) =================
    auto:true のメモ行は毎回いったん全部外してから入れ直す(重複しない)。
    行が増減するので入力中には動かさない(入力が止まってから schedDay 経由で呼ぶ)。 */
+/* 自動メモ行に手を入れた(直した・消した・動かした)ら、その人はもう自動で出さない */
+function memoOffAdd(r){
+  if(!r||r.type!=="memo"||!r.auto) return;
+  if(!Array.isArray(day.memoOff)) day.memoOff=[];
+  const n=r.rel||"";
+  if(n&&!day.memoOff.includes(n)) day.memoOff.push(n);
+  delete r.auto;
+}
 function autoMemoKey(){
   return JSON.stringify(day.blocks.map(b=>b.rows.map(r=>(r.type==="memo"&&r.auto)?("A"+r.name):"")));
 }
 function syncAutoMemos(){
   if(!day) return false;
+  const off=new Set(Array.isArray(day.memoOff)?day.memoOff:[]);
   const before=autoMemoKey();
   /* 1. いまの自動メモを全部はずす */
   day.blocks.forEach(b=>{ b.rows=b.rows.filter(r=>!(r.type==="memo"&&r.auto)); });
@@ -826,10 +854,11 @@ function syncAutoMemos(){
   let room=MAX_ROWS-totalRows();
   rels.sort((x,y)=> (y.b-x.b)||(y.i-x.i)).forEach(rel=>{
     if(room<=0) return;
+    if(off.has(rel.name)) return; /* 手で直した・消した人はもう自動で出さない */
     const rows=day.blocks[rel.b].rows;
     /* すでに手で「林洗浄」のように書いてあれば二重に入れない */
     if(rows.some(r=>r.type==="memo"&&!r.auto&&String(r.name||"").includes(rel.name)&&String(r.name||"").includes(rel.to))) return;
-    const m=blankRow(); m.type="memo"; m.auto=true;
+    const m=blankRow(); m.type="memo"; m.auto=true; m.rel=rel.name;
     m.name=(rel.start!=null? fT(rel.start)+" ":"")+rel.name+rel.to;
     rows.splice(rel.i,0,m); room--;
   });
@@ -909,7 +938,8 @@ function bindBlocks(){
     if(!tr||+tr.dataset.b!==rowDrag.b) return;
     e.preventDefault();
     const rows=day.blocks[rowDrag.b].rows, to=+tr.dataset.i;
-    const [mv]=rows.splice(rowDrag.i,1); rows.splice(to,0,mv);
+    const [mv]=rows.splice(rowDrag.i,1); memoOffAdd(mv); /* 動かした自動メモはその場所に固定 */
+    rows.splice(to,0,mv);
     rowDrag=null; clearDrop(); rebuild(); schedDay();
   });
   C.addEventListener("dragend",()=>{ rowDrag=null; asgDrag=null; clearDrop(); });
@@ -933,7 +963,8 @@ function onMainInput(e){
   if(bf==="title"){ day.blocks[+e.target.dataset.bb].title=e.target.value; schedDay(); return; }
   const tr=e.target.closest("tr[data-i]"); if(!tr) return;
   const b=+tr.dataset.b, i=+tr.dataset.i, r=day.blocks[b].rows[i], f=e.target.dataset.f;
-  if(r.type==="memo"){ if(f==="name"){ r.name=e.target.value; delete r.auto; /* 手で直したら手書きメモになる */
+  if(r.type==="memo"){ if(f==="name"){ memoOffAdd(r); /* 手で直したら手書きメモになる(自動では戻さない) */
+    r.name=e.target.value;
     e.target.closest("tr").classList.remove("autoMemo"); schedDay(); } return; }
   if(["qty","ken","sec","note","rice"].includes(f)){ r[f]=e.target.value; if(f==="qty"||f==="sec") recalc(); schedDay(); }
   else if(f==="min"){ r.min=e.target.value; recalc(); schedDay(); }
@@ -1012,8 +1043,9 @@ function onMainClick(e){
   else if(f==="ins"){
     if(totalRows()>=MAX_ROWS&&!confirm("全体で"+MAX_ROWS+"行を超えます。追加しますか?")) return;
     rows.splice(i,0,blankRow()); rebuild(); schedDay(); }
-  else if(f==="clr"){ if(confirm((i+1)+"行目をクリアしますか?(行は残ります)")){ rows[i]=blankRow(); rebuild(); schedDay(); } }
+  else if(f==="clr"){ if(confirm((i+1)+"行目をクリアしますか?(行は残ります)")){ memoOffAdd(rows[i]); rows[i]=blankRow(); rebuild(); schedDay(); } }
   else if(f==="rowdel"){ if(confirm((i+1)+"行目を削除して、下の行を詰めますか?")){
+    memoOffAdd(rows[i]);
     rows.splice(i,1);
     const minR=b===0?BASE_ROWS:1;
     while(rows.length<minR) rows.push(blankRow());
@@ -1388,7 +1420,9 @@ function zen2han(s){ return String(s??"").replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>
 function cellToRole(v,name){
   const s=zen2han(v).trim();
   if(!s) return null;
-  if(/^[〇○△\/]+$/.test(s)||/[✖✕×]/.test(s)) return null; /* 休み・〇・△は入れない */
+  if(/[✖✕×]/.test(s)||/^[\/]+$/.test(s)) return null; /* ✖と／は休み */
+  if(/^[〇○]+$/.test(s)) return {r1:"仕込",r2:""};      /* 〇は仕込と同じ意味 */
+  if(/^[△▲]+$/.test(s)) return {r1:"盛付",r2:"",kari:true}; /* △は仮の盛付。いらなければ手で消す */
   const found=[];
   if(s.includes("唐")) found.push("唐揚");
   if(s.includes("米")) found.push("米");
@@ -1403,7 +1437,8 @@ function cellToRole(v,name){
   /* A~Gの記号・数字などは出勤扱い → 基本役割(メンバータブ)を入れる */
   const d=defRoles[name];
   if(d&&String(d.r1||"").trim()) return {r1:String(d.r1).trim(),r2:String(d.r2||"").trim(),def:true};
-  return {noRole:true};
+  /* 基本役割が未登録でも、名前がある人は出勤者として入れる(役割は空欄。手で選べる) */
+  return {r1:"",r2:"",unknown:true};
 }
 /* 盛付ラインの並び順ルール: 先頭(最難)候補 → 上手い順 → 最後は出荷(H)チェック係 */
 const LINE_LEAD=["森山","山本","上中","ローズ"];
@@ -1426,6 +1461,7 @@ function buildAttForDay(list){
   [false,true].forEach(defPass=>{
     list.forEach(p=>{
       if(p._done||!!p.def!==defPass) return;
+      if(FORCE_POUR.includes(p.name)) return; /* 松山・山本は固定枠に入れず必ず盛付へ */
       const fi=FIXED_ROLES.indexOf(p.r1);
       if(fi>=0&&!att[fi].name){ att[fi].name=p.name; att[fi].r2=p.r2||""; p._done=true; }
     });
@@ -1433,12 +1469,12 @@ function buildAttForDay(list){
   const extra=[],pours=[],checks=[];
   list.forEach(p=>{
     if(p._done) return;
-    /* 藤田・見城などは チェック枠(緑)として一番右に置く。自動割当では一番最後に必ず入る。
-       シフト表で「H」(出荷チェック)になっていても盛付扱いにする */
-    if(CHECK_MEMBERS.includes(p.name)&&(p.r1==="盛付"||p.r1==="H")){
-      checks.push({name:p.name,r1:p.r1,r2:p.r2||"",time:"",timeMan:false,fixed:false,pour:CHK});
+    /* H(出荷チェック)の人は誰でもチェック枠。藤田・見城は盛付記号でもチェック枠。
+       チェック枠の人は商品の盛付人数に関係なく、担当のいちばん最後の升に入る */
+    if(p.r1==="H"||(CHECK_MEMBERS.includes(p.name)&&p.r1==="盛付")){
+      checks.push({name:p.name,r1:"H",r2:p.r2||"",time:"",timeMan:false,fixed:false,pour:CHK});
     }
-    else if(p.r1==="盛付") pours.push({name:p.name,r1:"盛付",r2:p.r2||"",time:"",timeMan:false,fixed:false,pour:true});
+    else if(p.r1==="盛付"||FORCE_POUR.includes(p.name)) pours.push({name:p.name,r1:"盛付",r2:p.r2||"",time:"",timeMan:false,fixed:false,pour:true});
     else extra.push({name:p.name,r1:p.r1,r2:p.r2||"",time:"",timeMan:false,fixed:false,pour:false});
   });
   const ordered=orderPours(pours);
@@ -1530,8 +1566,8 @@ async function importShift(buf,optSheet,optYear){
     people.forEach(p=>{
       const r=cellToRole(p.row[col],p.member);
       if(!r) return;
-      if(r.noRole){ none.add(p.member); return; }
-      list.push({name:p.member,r1:r.r1,r2:r.r2});
+      if(r.unknown) none.add(p.member); /* 役割は空欄で入れる(あとで知らせる) */
+      list.push({name:p.member,r1:r.r1,r2:r.r2,unknown:r.unknown,kari:r.kari,def:r.def});
     });
     if(!list.length) continue;
     const ds=year+"-"+pad(mon)+"-"+pad(d);
@@ -1555,7 +1591,7 @@ async function importShift(buf,optSheet,optYear){
   let msg=year+"年"+mon+"月分: "+done+"日分の出勤者を入れました。";
   if(redone) msg+="\nそのうち入れ直した日: "+redone+"日("+mon+"月"+ovwFrom+"日以降)";
   if(skip) msg+="\nそのままにした日: "+skip+"日(すでに名前が入っていたため)";
-  if(none.size) msg+="\n基本役割が未登録のため入れられなかった人: "+[...none].join("、")+"\n→ メンバータブで基本役割を登録してから、もう一度取り込むと入ります。";
+  if(none.size) msg+="\n役割が分からず「その他の枠」に入れた人: "+[...none].join("、")+"\n→ メンバータブで基本役割を登録すると、次の取込から役割も入ります。";
   alert(msg);
 }
 
