@@ -197,7 +197,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
 <body>
 <div class="app">
 <div class="topbar">
-  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v26.1 クラウド</span>
+  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v26.2 クラウド</span>
   <span class="savestat" id="saveStat"></span>
   <button class="btn" id="btnLogout" style="font-size:11px;padding:3px 8px;border-color:#8fa5c0;color:#cfd9e6;background:transparent">ログアウト</button>
   <div class="tabs">
@@ -265,6 +265,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
     ・「<b>並</b>」ボタンで<b>並行作業の行</b>(青)になります。時間の流れから外れるので、他の行と時間が重なってOK(例: 7:00から山本さんが一人でブケAを流す)。開始か終了を手入力すると、もう片方は自動計算されます。担当も自動では入らないので手で選んでください。<br>
     ・<b>予定開始も手入力で上書きできます</b>(オレンジ色になり、その行から上はその時刻でつながります)。「戻」で自動に戻ります。<br>
     ・第2ブロック(厨房さん など)は独立した時刻のつながりを持ちます。担当①~⑥は、シフト表の盛付枠の並びが商品行に自動で入ります(第2ブロックは手動選択)。どこかの行で担当を変えると、その行から下は新しい並びになります。「担」で上の行の並びに戻せます。<br>
+    ・担当セル左の<b>⠿をドラッグ</b>すると、<b>横(同じ行)なら入れ替え</b>、<b>上下の行へならその人をコピー</b>できます。コピー先の行にその人が別の升で入っていたら、そちらは自動で消えます(同じ人が同じ行に二度出ません)。<br>
     ・担当セルは<b>候補から選ぶだけでなく、名前を直接手入力もできます</b>(登録外の名前もOK)。クリックすると文字が全選択されるので、そのまま打てば上書き、<b>Deleteキーで空欄</b>になります。数字などの欄は<b>Enterで下の行の同じ欄へ</b>移動します。<b>行は左端の番号をつかんでドラッグ</b>でも動かせます。<br>
     ・<b>「↩ 戻る」「↪ 進む」ボタン(またはCtrl+Z／Ctrl+Y)</b>で、直前の操作の取り消し・やり直しができます(この画面を開いている間のみ。ページを閉じたり再読込すると履歴は消えます)。<br>
     ・ご飯は商品マスターで<b>「炊込・白・黄」のように複数種</b>を登録できます。印刷では枠に収まるよう自動で文字が小さくなります。<br>
@@ -881,7 +882,7 @@ function bindBlocks(){
     }
     if(f==="code"||f==="name") delete e.target.dataset.prev;
   });
-  /* 行のドラッグ移動(同じブロック内) と 担当名のドラッグ入替(同じ行内) */
+  /* 行のドラッグ移動(同じブロック内) と 担当名のドラッグ(横=入れ替え / 縦=コピー) */
   let rowDrag=null, asgDrag=null, dropEl=null;
   const clearDrop=()=>{ if(dropEl){ dropEl.classList.remove("dropTgt"); dropEl.classList.remove("dropTgtA"); dropEl=null; } };
   C.addEventListener("dragstart",e=>{
@@ -900,8 +901,9 @@ function bindBlocks(){
   });
   C.addEventListener("dragover",e=>{
     if(asgDrag){
+      /* 同じ行なら入れ替え、上下の行へならその人をコピー(同じブロック内) */
       const td=e.target.closest("td.asg"), tr=e.target.closest("tr[data-i]");
-      if(!td||!tr||+tr.dataset.b!==asgDrag.b||+tr.dataset.i!==asgDrag.i) return;
+      if(!td||!tr||+tr.dataset.b!==asgDrag.b) return;
       e.preventDefault();
       if(dropEl!==td){ clearDrop(); dropEl=td; td.classList.add("dropTgtA"); }
       return;
@@ -915,14 +917,26 @@ function bindBlocks(){
   C.addEventListener("drop",e=>{
     if(asgDrag){
       const td=e.target.closest("td.asg"), tr=e.target.closest("tr[data-i]");
-      if(!td||!tr||+tr.dataset.b!==asgDrag.b||+tr.dataset.i!==asgDrag.i) return;
+      if(!td||!tr||+tr.dataset.b!==asgDrag.b) return;
       e.preventDefault();
       const sel=td.querySelector('[data-f="asg"]'); if(!sel) return;
-      const to=+sel.dataset.a, r=day.blocks[asgDrag.b].rows[asgDrag.i];
-      if(to!==asgDrag.a){
-        r.asgMan=true;
-        [r.asg[asgDrag.a],r.asg[to]]=[r.asg[to],r.asg[asgDrag.a]];
-        recalc(); schedDay();
+      const to=+sel.dataset.a, ti=+tr.dataset.i;
+      const src=day.blocks[asgDrag.b].rows[asgDrag.i];
+      if(ti===asgDrag.i){            /* 同じ行の中 → 入れ替え */
+        if(to!==asgDrag.a){
+          src.asgMan=true;
+          [src.asg[asgDrag.a],src.asg[to]]=[src.asg[to],src.asg[asgDrag.a]];
+          recalc(); schedDay();
+        }
+      }else{                          /* 上下の行へ → その人をコピー */
+        const nm=src.asg[asgDrag.a]||"";
+        const dst=day.blocks[asgDrag.b].rows[ti];
+        if(nm&&dst&&dst.type!=="memo"){
+          dst.asgMan=true;
+          dst.asg=dst.asg.map((x,ix)=> (ix!==to&&x===nm)? "":x); /* 同じ行に二度出さない */
+          dst.asg[to]=nm;
+          recalc(); schedDay();
+        }
       }
       asgDrag=null; clearDrop(); return;
     }
@@ -967,7 +981,9 @@ function onMainInput(e){
     const m=findByCode(e.target.value); if(m) applyMaster(tr,r,m);
     recalc(); schedDay(); }
   else if(f==="name"){ r.name=e.target.value; recalc(); schedDay(); }
-  else if(f==="asg"){ const a=+e.target.dataset.a; r.asgMan=true; r.asg[a]=e.target.value; recalc(); schedDay(); }
+  else if(f==="asg"){ const a=+e.target.dataset.a; r.asgMan=true; const v=e.target.value;
+    if(v) r.asg=r.asg.map((x,ix)=> (ix!==a&&x===v)? "":x); /* 同じ人が同じ行に二度出ないように */
+    r.asg[a]=v; recalc(); schedDay(); }
 }
 function onMainChange(e){
   const tr=e.target.closest("tr[data-i]"); if(!tr) return;
@@ -976,7 +992,9 @@ function onMainChange(e){
   if(f==="code"){ const m=findByCode(e.target.value); if(m) applyMaster(tr,r,m); recalc(); schedDay(); }
   else if(f==="name"){ const m=findByName(e.target.value); if(m) applyMaster(tr,r,m); recalc(); schedDay(); }
   else if(f==="ppl"){ r.ppl=e.target.value; schedDay(); }
-  else if(f==="asg"){ const a=+e.target.dataset.a; r.asgMan=true; r.asg[a]=e.target.value; recalc(); schedDay(); }
+  else if(f==="asg"){ const a=+e.target.dataset.a; r.asgMan=true; const v=e.target.value;
+    if(v) r.asg=r.asg.map((x,ix)=> (ix!==a&&x===v)? "":x); /* 同じ人が同じ行に二度出ないように */
+    r.asg[a]=v; recalc(); schedDay(); }
   else if(f==="end"){ // normalize on blur
     if(r.endMan){ const m=pT(r.end); if(m!=null){ r.end=fT(m); } }
     recalc(); schedDay(); }
@@ -1080,7 +1098,10 @@ function ruleTime(rule,morn){
 }
 function autoTimeText(a,morn){
   let rule=null;
-  if(a.fixed){ rule=ROLE_RULES[String(a.r1).trim()]; if(rule==null||rule==="") rule=rules[a.name]||null; }
+  /* 役割が調理・米・唐揚・仕込の枠は、固定枠でなくても役割の時間を入れる
+     (新人教育などで同じ役割の枠を2つ作ったとき、2人とも同じ時間になるように) */
+  const r1=String(a.r1||"").trim();
+  if(a.fixed||ROLE_RULES[r1]!==undefined){ rule=ROLE_RULES[r1]; if(rule==null||rule==="") rule=rules[a.name]||null; }
   else rule=rules[a.name]||null;
   rule=String(rule??"").trim();
   if(!rule) return "";
