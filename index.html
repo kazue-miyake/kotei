@@ -197,7 +197,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
 <body>
 <div class="app">
 <div class="topbar">
-  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v26.2 クラウド</span>
+  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v26.3 クラウド</span>
   <span class="savestat" id="saveStat"></span>
   <button class="btn" id="btnLogout" style="font-size:11px;padding:3px 8px;border-color:#8fa5c0;color:#cfd9e6;background:transparent">ログアウト</button>
   <div class="tabs">
@@ -272,7 +272,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
     ・並行行の印刷は、開始・終了の列は空欄になり、商品名の頭に「∥開始→終了」が太字で付きます(本流の時間列が上から順に読めるように)。<br>
     ・出勤時間は朝礼時刻とメンバータブのルールから自動計算(手で書き換え可・空欄に戻すと自動)。担当の自動割当は、盛付枠の並び順から商品の盛付人数のぶん入ります。<br>
     ・担当は<b>出勤時間帯に合わせて自動で入れ替わります</b>。出勤前の行には入らず(例: 6:00出勤の人は6:00より前の行に入らない)、帰り時間(「7:00～9:00」など)を過ぎた行からは外れて次の人が繰り上がります。行の途中で帰り時間になる場合はその行までは入ります。<br>
-    ・役割が<b>H(出荷チェック)</b>の枠の人は、いつも<b>その商品の盛付人数のいちばん最後の升</b>に入ります(例: 4人の商品なら4番目、5人なら5番目)。コンベアの最後でチェックする係のためです。<br>
+    ・役割が<b>H(出荷チェック)</b>の枠の人は、いつも<b>その商品の盛付人数のいちばん最後の升</b>に入ります(例: 4人の商品なら4番目、5人なら5番目)。コンベアの最後でチェックする係のためです。<b>間に入る人が足りないときもHは手前にずれません</b>。足りない升は赤枠のまま空きます。<br>
     ・人が余ったときに自動で入る<b>青いメモ行</b>(「6:00 林洗浄」など)は、<b>手で直す・消す・動かすことができます</b>。手を入れるとその人の分はその日もう自動では出てきません。<br>
     ・行数の目安は全体で35行まで(超えると注意が出ます)。21行を超えると印刷は自動で2枚目に続きます。
   </div>
@@ -769,10 +769,16 @@ function cascadeAsg(b,times){
         mains.splice(mains.indexOf(hit.name),1);
         out.releases.push({b,i,name:hit.name,to:hit.to,start:o.start});
       }
-      /* チェック係(コンベアの最後でチェックする係)は、その商品の必要人数のいちばん最後の升に入る */
-      const list=mains.slice(0,cap).concat(cks).slice(0,NASG);
-      if(list.length<n) out.short.set(i,n-list.length);
-      r.asg=Array(NASG).fill("").map((_,ix)=> list[ix]||"");
+      /* チェック係(コンベアの最後でチェックする係)は、その商品の標準人数のいちばん最後の升に固定する。
+         例: 標準人数4なら盛付④、5なら盛付⑤。人が足りなくて間が埋まらないときは、
+         Hを手前にずらさず、あいだの升を空欄(赤枠)のままにする */
+      const slots=Array(NASG).fill("");
+      mains.slice(0,cap).forEach((nm,ix)=>{ slots[ix]=nm; });
+      const base=Math.min(n,NASG)-cks.length;   /* Hが入りはじめる升 */
+      cks.forEach((nm,k)=>{ const pos=base+k; if(pos>=0&&pos<NASG) slots[pos]=nm; });
+      const filled=slots.filter(Boolean).length;
+      if(filled<n) out.short.set(i,n-filled);
+      r.asg=slots;
     }
   }
   return out;
