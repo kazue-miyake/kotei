@@ -197,7 +197,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
 <body>
 <div class="app">
 <div class="topbar">
-  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v26.5 クラウド</span>
+  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v26.6 クラウド</span>
   <span class="savestat" id="saveStat"></span>
   <button class="btn" id="btnLogout" style="font-size:11px;padding:3px 8px;border-color:#8fa5c0;color:#cfd9e6;background:transparent">ログアウト</button>
   <div class="tabs">
@@ -1443,6 +1443,14 @@ function loadXLSX(){ return new Promise((res,rej)=>{
   s.onload=()=>res(); s.onerror=()=>rej(new Error("Excel読込ライブラリを取得できませんでした。ネット接続を確認してください。"));
   document.head.appendChild(s);
 }); }
+/* 名前の照合用: 異体字・空白のゆれを吸収する(シフト表と登録名で字が違っても同じ人と見なす) */
+function normName(s){
+  return String(s??"")
+    .replace(/[齊齋斎]/g,"斉").replace(/髙/g,"高").replace(/[﨑嵜]/g,"崎")
+    .replace(/[邊邉]/g,"辺").replace(/[澤]/g,"沢").replace(/[濱]/g,"浜")
+    .replace(/[德]/g,"徳").replace(/[瀨]/g,"瀬").replace(/[莊]/g,"荘")
+    .replace(/[\s　]/g,"");
+}
 function zen2han(s){ return String(s??"").replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/／/g,"/").replace(/[\s　]/g,""); }
 /* セルの記号 → 役割。null=その日は入れない */
 function cellToRole(v,name){
@@ -1581,13 +1589,14 @@ async function importShift(buf,optSheet,optYear){
       ovwFrom=n;
     }
   }
-  /* 人の行を探す(名前列とメンバー登録の照合。登録がない人は無視) */
+  /* 人の行を探す(名前列とメンバー登録の照合。登録がない人は無視)
+     「斎藤/斉藤」「髙/高」のような字の違いは同じ名前として扱う */
   const sorted=[...members].sort((a,b)=>b.length-a.length);
   const seen=new Set(), people=[];
   for(let ri=2;ri<arr.length&&ri<60;ri++){
-    const nm=String((arr[ri]||[])[0]||"").trim();
+    const nm=normName(String((arr[ri]||[])[0]||"").trim());
     if(!nm) continue;
-    const m=sorted.find(x=>nm.startsWith(x));
+    const m=sorted.find(x=>nm.startsWith(normName(x)));
     if(!m||seen.has(m)) continue;
     seen.add(m); people.push({member:m,row:arr[ri]||[]});
   }
