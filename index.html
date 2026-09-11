@@ -197,7 +197,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
 <body>
 <div class="app">
 <div class="topbar">
-  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v26.3 クラウド</span>
+  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v26.4 クラウド</span>
   <span class="savestat" id="saveStat"></span>
   <button class="btn" id="btnLogout" style="font-size:11px;padding:3px 8px;border-color:#8fa5c0;color:#cfd9e6;background:transparent">ログアウト</button>
   <div class="tabs">
@@ -359,13 +359,15 @@ const CHK = "chk";
 /* シフト取込のとき自動でチェック枠(緑・一番右)にする人。ここを直せば増減できる
    ※シフト表で「H」の人は、ここに無くても自動でチェック枠になる */
 const CHECK_MEMBERS = ["藤田","見城"];
+/* 上の人が誰も出ていない日は、この人が出荷(H)チェック係になる */
+const CHECK_BACKUP = "青木";
 /* シフト表の記号に関係なく、必ず盛付枠に入れる人(7:00出勤で盛付に入るため) */
 const FORCE_POUR = ["松山","山本"];
 /* 盛付の人が必要人数より多いとき、この順に盛付から外して別の仕事へ回す。
    一度外れた人はその日の以降の行でも外れたまま。名前を足したい・順番を変えたいときはここを直す */
 const RELEASE_ORDER = [
-  {name:"林",   to:"洗浄"},
-  {name:"上中", to:"折"},
+  {name:"上中", to:"折"},    /* 折の担当があるので、なるべく早く時間を確保する */
+  {name:"林",   to:"洗浄"},  /* 森山より先に外して洗浄にまわす */
   {name:"森山", to:"洗浄"},
 ];
 
@@ -708,6 +710,8 @@ function asgN(r){ // 自動で入れる人数 = 商品の盛付人数(空欄な�
   const v=parseInt(r.ppl,10);
   return (isFinite(v)&&v>0)? Math.min(v,NASG) : 4;
 }
+/* weekly(並べ作業)は「人が余っていれば余った人数、余っていなければ全員」 */
+const isWeekly=r=>/weekly|ｳｨｰｸﾘｰ|ウィークリー/i.test(String(r&&r.name||""));
 /* シフト枠の出勤時間 → いられる時間帯 {from,to}(分)。"7:00～9:00"=両方 / "5:20"=開始のみ */
 function availWin(a){
   /* 手入力で「７：００～10：00１０：００」のように崩れていても読めるように、
@@ -743,7 +747,7 @@ function cascadeAsg(b,times){
   const needAfter=Array(rows.length).fill(0);
   { let mx=0;
     for(let i=rows.length-1;i>=0;i--){
-      if(hasProduct(rows[i])&&!rows[i].par) mx=Math.max(mx,asgN(rows[i]));
+      if(hasProduct(rows[i])&&!rows[i].par&&!isWeekly(rows[i])) mx=Math.max(mx,asgN(rows[i]));
       needAfter[i]=mx;
     } }
   for(let i=0;i<rows.length;i++){ const r=rows[i];
@@ -756,7 +760,11 @@ function cascadeAsg(b,times){
       const o=(times&&times[i])||{start:null,end:null};
       /* 行の時間帯にいる人だけを並び順で(帰った人は外れて次の人が繰り上がり) */
       const av=cur.filter(x=>x&&fitWin(win[x],o.start,o.end));
-      const n=asgN(r);
+      let n=asgN(r);
+      if(isWeekly(r)){ /* 並べ作業: この先に要る人数より多くいれば、余ったぶんだけで回す */
+        const spare=av.length-needAfter[i];
+        if(spare>0&&spare<av.length) n=spare;
+      }
       /* チェック枠(H)も必要人数のうちに数える。ただし表示はいつも担当のいちばん最後の升 */
       const cks=av.filter(x=>chkSet.has(x));
       const cap=Math.max(0,Math.min(n,NASG)-cks.length);
@@ -1479,6 +1487,11 @@ function orderPours(pours){
 /* その日の出勤者リスト → シフト枠 */
 function buildAttForDay(list){
   const att=[];
+  /* 藤田・見城が誰も出ていない日は、青木が出荷(H)チェック係に回る */
+  if(!list.some(p=>CHECK_MEMBERS.includes(p.name)||String(p.r1)==="H")){
+    const bk=list.find(p=>p.name===CHECK_BACKUP);
+    if(bk){ bk.r1="H"; bk.r2=""; }
+  }
   for(let i=0;i<4;i++) att.push({name:"",r1:FIXED_ROLES[i],r2:"",time:"",timeMan:false,fixed:true});
   /* 固定4枠(調理・米・唐揚・仕込)は、記号で明記された人を基本役割の人より優先 */
   [false,true].forEach(defPass=>{
@@ -1650,7 +1663,8 @@ function sikomiRowObj(p){ /* 集計済み商品 → 工程表の行 */
   r.sec=m&&m.sec!==""&&m.sec!=null? String(m.sec):"";
   r.rice=m? (m.rice||"白"):""; r.ppl=m&&m.ppl!==""&&m.ppl!=null? String(m.ppl):"";
   if(p.ryuchi) r.min="5"; /* 留置は内容が簡単なので5分固定 */
-  if(String(p.code).trim()==="398") r.min="5"; /* 大御所唐揚げは5分(唐揚げ2種で15分) */
+  /* 実績どおりの固定値(毎回手で直していたぶん)。198金賞弁当・397金賞単品・398大御所単品 */
+  if(["198","397","398"].includes(String(p.code).trim())) r.min="5";
   r.note=p.note||"";
   if(p.orikey) r.impKey=p.orikey; /* 折詰(375)は行ごとに管理 */
   r.impQty=String(p.qty); r.impKen=p.ken? String(p.ken):"";
@@ -1756,9 +1770,9 @@ async function importSikomi(buf){
     newRows.sort(cmpRows); /* 残り=別注: 人数少ない順→白→番号順 */
     const all=[...ryuYu,...ryuHi];
     if(!hol){ all.push(dayNote(fixedRow("ﾊﾝﾊﾞｰｸﾞ弁当","13","")), dayNote(fixedRow("金賞唐揚げ弁当","5","5"))); }
-    all.push(...kin198);
-    if(!hol) all.push(dayNote(fixedRow("weekly/ピラフ/のし","5","")));
-    all.push(...k397,...k398,...newRows);
+    all.push(...kin198,...k397);
+    if(!hol) all.push(dayNote(fixedRow("weekly/ピラフ/のし","5","")));  /* 実績どおり金賞単品の後ろ */
+    all.push(...k398,...newRows);
     if(!hol){
       all.push(fixedRow("日替わり準備","","5","5"), fixedRow("プチ","","15","5"));
       const g=gohan[0]||fixedRow("ごはん屋弁当","","45","5");
@@ -1766,7 +1780,7 @@ async function importSikomi(buf){
       all.push(g);
     } else all.push(...gohan);
     all.push(...odv);
-    if(!hol) all.push(fixedRow("翌日用カップ","",""));
+    if(!hol) all.push(fixedRow("翌日用カップ","","","3")); /* 実績は3人が最多 */
     while(all.length<BASE_ROWS) all.push(blankRow());
     dd2.blocks[0].rows=all;
     const items=all.filter(r=>hasProduct(r));
