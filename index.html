@@ -1461,17 +1461,20 @@ function cellToRole(v,name){
   return {r1:"",r2:"",unknown:true};
 }
 /* 盛付ラインの並び順ルール: 先頭(最難)候補 → 上手い順 → 最後は出荷(H)チェック係 */
-const LINE_LEAD=["森山","山本","上中","ローズ"];
-const LINE_SKILL=["山本","上中","松山","ローズ","竹村","林","浦田","山田"];
+/* 先頭(ラインの最初)の優先順。山本は7:00出勤なので、それより前の行は自動で次の人(森山→上中)が先頭になる */
+const LINE_LEAD=["山本","森山","上中"];
+const LINE_SKILL=["山本","上中","松山","ローズ","竹村","林","山田"];
+const LINE_LAST=["浦田"];   /* 盛付に入る優先順位は最下位(基本は米担当) */
 const LINE_CHECK=["藤田","見城","青木"];
 function orderPours(pours){
-  const rest=[...pours], checks=[];
+  const rest=[...pours], checks=[], lasts=[];
   for(const c of LINE_CHECK){ const i=rest.findIndex(p=>p.name===c); if(i>=0) checks.push(...rest.splice(i,1)); }
-  let lead=null;
-  for(const c of LINE_LEAD){ const i=rest.findIndex(p=>p.name===c); if(i>=0){ lead=rest.splice(i,1)[0]; break; } }
+  for(const c of LINE_LAST){ const i=rest.findIndex(p=>p.name===c); if(i>=0) lasts.push(...rest.splice(i,1)); }
+  const leads=[];
+  for(const c of LINE_LEAD){ const i=rest.findIndex(p=>p.name===c); if(i>=0) leads.push(rest.splice(i,1)[0]); }
   const rk=n=>{ const i=LINE_SKILL.indexOf(n); return i<0?99:i; };
   rest.sort((a,b)=>rk(a.name)-rk(b.name));
-  return (lead?[lead]:[]).concat(rest,checks);
+  return leads.concat(rest,lasts,checks);
 }
 /* その日の出勤者リスト → シフト枠 */
 function buildAttForDay(list){
@@ -1757,7 +1760,7 @@ async function importSikomi(buf){
     if(!hol) all.push(dayNote(fixedRow("weekly/ピラフ/のし","5","")));
     all.push(...k397,...k398,...newRows);
     if(!hol){
-      all.push(fixedRow("日替わり準備","","5"), fixedRow("プチ","","15","5"));
+      all.push(fixedRow("日替わり準備","","5","5"), fixedRow("プチ","","15","5"));
       const g=gohan[0]||fixedRow("ごはん屋弁当","","45","5");
       g.min="45"; g.end="9:00"; g.endMan=true; g.note="";
       all.push(g);
