@@ -197,7 +197,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
 <body>
 <div class="app">
 <div class="topbar">
-  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v26.4 クラウド</span>
+  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v26.5 クラウド</span>
   <span class="savestat" id="saveStat"></span>
   <button class="btn" id="btnLogout" style="font-size:11px;padding:3px 8px;border-color:#8fa5c0;color:#cfd9e6;background:transparent">ログアウト</button>
   <div class="tabs">
@@ -761,12 +761,12 @@ function cascadeAsg(b,times){
       /* 行の時間帯にいる人だけを並び順で(帰った人は外れて次の人が繰り上がり) */
       const av=cur.filter(x=>x&&fitWin(win[x],o.start,o.end));
       let n=asgN(r);
-      if(isWeekly(r)){ /* 並べ作業: この先に要る人数より多くいれば、余ったぶんだけで回す */
-        const spare=av.length-needAfter[i];
-        if(spare>0&&spare<av.length) n=spare;
-      }
       /* チェック枠(H)も必要人数のうちに数える。ただし表示はいつも担当のいちばん最後の升 */
-      const cks=av.filter(x=>chkSet.has(x));
+      let cks=av.filter(x=>chkSet.has(x));
+      if(isWeekly(r)){ /* 並べ作業: この先に要る人数より多くいれば、余ったぶんだけで回す(Hは入れない) */
+        const spare=av.length-needAfter[i];
+        if(spare>0&&spare<av.length){ n=spare; cks=[]; }
+      }
       const cap=Math.max(0,Math.min(n,NASG)-cks.length);
       const mains=av.filter(x=>!chkSet.has(x)&&!released.has(x));
       /* この先ずっと余る人だけ RELEASE_ORDER の順に外す(外した記録はメモ行のもとになる) */
