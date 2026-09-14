@@ -197,7 +197,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
 <body>
 <div class="app">
 <div class="topbar">
-  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v26.6 クラウド</span>
+  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v26.7 クラウド</span>
   <span class="savestat" id="saveStat"></span>
   <button class="btn" id="btnLogout" style="font-size:11px;padding:3px 8px;border-color:#8fa5c0;color:#cfd9e6;background:transparent">ログアウト</button>
   <div class="tabs">
@@ -737,6 +737,7 @@ function fitWin(w,s,e){ // 行の時間帯[s,e]にその人がいるか
 }
 function cascadeAsg(b,times){
   let cur=baseAsg(b);
+  const baseList=cur.filter(Boolean);    /* シフト欄の並び(手で直した行のあとで出勤前の人を戻す位置に使う) */
   const win={}; day.att.forEach(a=>{ if(a.name&&!(a.name in win)) win[a.name]=availWin(a); });
   /* チェック枠(出荷H)の人は商品の盛付人数に関係なく、いつも担当のいちばん最後の升 */
   const chkSet=new Set(day.att.filter(isChkAtt).map(a=>a.name));
@@ -753,8 +754,21 @@ function cascadeAsg(b,times){
   for(let i=0;i<rows.length;i++){ const r=rows[i];
     if(!hasProduct(r)) continue;
     if(r.par) continue; // 並行行は自動割当も下への引き継ぎもしない
-    if(r.asgMan){ cur=[...r.asg]; while(cur.length<NASG) cur.push("");
-      cur.forEach(x=>{ if(x) released.delete(x); }); /* 手で入れ直した人は戻す */
+    if(r.asgMan){
+      const man=[...r.asg].filter(Boolean);
+      /* 手で直した行の時点でまだ出勤前(または時間外)だった人は、シフト欄の並びの位置に戻しておく。
+         例: 6:50の行を手で直しても、7:00出勤の山本・松山は7:00以降の行で自動で入る。
+         時間内なのに手で外した人は戻さない(意図して外したとみなす) */
+      const o=(times&&times[i])||{start:null,end:null};
+      const out2=[...man];
+      baseList.filter(x=>!man.includes(x)&&!fitWin(win[x],o.start,o.end)).forEach(x=>{
+        const bi=baseList.indexOf(x);
+        let pos=0;
+        for(let k=0;k<bi;k++){ const j=out2.indexOf(baseList[k]); if(j>=0) pos=Math.max(pos,j+1); }
+        out2.splice(pos,0,x);
+      });
+      cur=out2; while(cur.length<NASG) cur.push("");
+      man.forEach(x=>released.delete(x)); /* 手で入れ直した人は戻す */
     }
     else{
       const o=(times&&times[i])||{start:null,end:null};
