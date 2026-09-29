@@ -197,7 +197,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
 <body>
 <div class="app">
 <div class="topbar">
-  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v26.8 クラウド</span>
+  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v26.9 クラウド</span>
   <span class="savestat" id="saveStat"></span>
   <button class="btn" id="btnLogout" style="font-size:11px;padding:3px 8px;border-color:#8fa5c0;color:#cfd9e6;background:transparent">ログアウト</button>
   <div class="tabs">
@@ -1122,6 +1122,10 @@ function ensureAtt(){
     day.att.push({name:"",r1:"盛付",r2:"",time:"",fixed:false});
   day.att.forEach(a=>{ if(a.timeMan===undefined) a.timeMan=!!String(a.time||"").trim();
     if(!a.fixed&&a.pour===undefined) a.pour=true;
+    /* 役割が「盛」「盛付」なのに その他枠(緑) になっている枠は盛付枠に直す。
+       手で「他」に切り替えた枠(kindMan)は触らない。
+       ※斉藤さん・森山さんがこれで自動割当から外れていた(2026-09-29に判明) */
+    if(!a.fixed&&!a.kindMan&&a.pour===false&&/^盛(付)?$/.test(String(a.r1||"").trim())) a.pour=true;
     /* 取込済みの日にも反映: 藤田・見城の盛付枠(と役割H枠)はチェック枠(緑)に。手で種類を変えた枠は触らない */
     if(!a.fixed&&!a.kindMan&&CHECK_MEMBERS.includes(a.name)
        &&(a.pour===true||(a.pour===false&&String(a.r1||"").trim()==="H"))) a.pour=CHK; });
@@ -1503,7 +1507,7 @@ function cellToRole(v,name){
 /* 盛付ラインの並び順ルール: 先頭(最難)候補 → 上手い順 → 最後は出荷(H)チェック係 */
 /* 先頭(ラインの最初)の優先順。山本は7:00出勤なので、それより前の行は自動で次の人(森山→上中)が先頭になる */
 const LINE_LEAD=["山本","森山","上中"];
-const LINE_SKILL=["山本","上中","松山","ローズ","竹村","林","山田"];
+const LINE_SKILL=["山本","森山","松山","ローズ","竹村","林","斉藤","上中","山田"];  /* 直近30日の実績から算出(2026-09-29)。上中は折があるため後ろ */
 const LINE_LAST=["浦田"];   /* 盛付に入る優先順位は最下位(基本は米担当) */
 const LINE_CHECK=["藤田","見城","青木"];
 function orderPours(pours){
