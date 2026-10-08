@@ -197,7 +197,7 @@ table.mst input:focus{outline:2px solid var(--navy);outline-offset:-2px}
 <body>
 <div class="app">
 <div class="topbar">
-  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v27.0 クラウド</span>
+  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v27.1 クラウド</span>
   <span class="savestat" id="saveStat"></span>
   <button class="btn" id="btnLogout" style="font-size:11px;padding:3px 8px;border-color:#8fa5c0;color:#cfd9e6;background:transparent">ログアウト</button>
   <div class="tabs">
@@ -363,6 +363,8 @@ const CHECK_MEMBERS = ["藤田","見城"];
 const CHECK_BACKUP = "青木";
 /* シフト表の記号に関係なく、必ず盛付枠に入れる人(7:00出勤で盛付に入るため) */
 const FORCE_POUR = ["松山","山本"];
+/* 枠が「早洗」などその他の枠でも、盛付の担当に入れる人(先頭もできる) */
+const ALWAYS_POUR = ["森山"];
 /* 盛付の人が必要人数より多いとき、この順に盛付から外して別の仕事へ回す。
    一度外れた人はその日の以降の行でも外れたまま。名前を足したい・順番を変えたいときはここを直す */
 const RELEASE_ORDER = [
@@ -714,7 +716,8 @@ function baseAsg(b){ // ブロック①はシフト表の盛付枠(左から)。
   /* 盛付枠(青)を左から。チェック枠(H・藤田/見城など)は担当のいちばん最後の升へ */
   const pour=[],chk=[];
   day.att.forEach(a=>{ if(a.fixed||!a.name) return;
-    if(isChkAtt(a)) chk.push(a.name); else if(a.pour!==false) pour.push(a.name); });
+    if(isChkAtt(a)) chk.push(a.name);
+    else if(a.pour!==false||ALWAYS_POUR.includes(a.name)) pour.push(a.name); });
   /* ここでは人数を切らない(行ごとに出勤時間で絞ってから必要人数だけ入れるため) */
   const names=pour.concat(chk);
   while(names.length<NASG) names.push("");
@@ -1034,9 +1037,10 @@ function onMainChange(e){
   if(f==="code"){ const m=findByCode(e.target.value); if(m) applyMaster(tr,r,m); recalc(); schedDay(); }
   else if(f==="name"){ const m=findByName(e.target.value); if(m) applyMaster(tr,r,m); recalc(); schedDay(); }
   else if(f==="ppl"){ r.ppl=e.target.value; schedDay(); }
-  else if(f==="asg"){ const a=+e.target.dataset.a; r.asgMan=true; const v=e.target.value;
+  else if(f==="asg"){ const a=+e.target.dataset.a; r.asgMan=true;
+    const v=toMemberName(e.target.value);   /* 登録の表記にそろえる */
     if(v) r.asg=r.asg.map((x,ix)=> (ix!==a&&x===v)? "":x); /* 同じ人が同じ行に二度出ないように */
-    r.asg[a]=v; recalc(); schedDay(); }
+    r.asg[a]=v; e.target.value=v; recalc(); schedDay(); }
   else if(f==="end"){ // normalize on blur
     if(r.endMan){ const m=pT(r.end); if(m!=null){ r.end=fT(m); } }
     recalc(); schedDay(); }
@@ -1477,11 +1481,19 @@ function loadXLSX(){ return new Promise((res,rej)=>{
 }); }
 /* 名前の照合用: 異体字・空白のゆれを吸収する(シフト表と登録名で字が違っても同じ人と見なす) */
 function normName(s){
-  return String(s??"")
+  /* NFKCで半角カナ→全角(ﾛｰｽﾞ→ローズ)などをそろえてから、異体字を直す */
+  return String(s??"").normalize("NFKC")
     .replace(/[齊齋斎]/g,"斉").replace(/髙/g,"高").replace(/[﨑嵜]/g,"崎")
     .replace(/[邊邉]/g,"辺").replace(/[澤]/g,"沢").replace(/[濱]/g,"浜")
     .replace(/[德]/g,"徳").replace(/[瀨]/g,"瀬").replace(/[莊]/g,"荘")
     .replace(/[\s　]/g,"");
+}
+/* 担当セルに打った名前を、メンバー登録の表記にそろえる(斎藤→斉藤、ﾛｰｽﾞ→ローズ)。
+   登録に無い名前はそのまま使える */
+function toMemberName(v){
+  const s=String(v??"").trim(); if(!s) return s;
+  const n=normName(s);
+  return members.find(m=>normName(m)===n)||s;
 }
 function zen2han(s){ return String(s??"").replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/／/g,"/").replace(/[\s　]/g,""); }
 /* セルの記号 → 役割。null=その日は入れない */
@@ -1510,9 +1522,9 @@ function cellToRole(v,name){
 }
 /* 盛付ラインの並び順ルール: 先頭(最難)候補 → 上手い順 → 最後は出荷(H)チェック係 */
 /* 先頭(ラインの最初)の優先順。山本は7:00出勤なので、それより前の行は自動で次の人(森山→上中)が先頭になる */
-const LINE_LEAD=["山本","森山","上中"];
-const LINE_SKILL=["山本","森山","松山","ローズ","竹村","林","斉藤","上中","山田"];  /* 直近30日の実績から算出(2026-09-29)。上中は折があるため後ろ */
-const LINE_LAST=["浦田"];   /* 盛付に入る優先順位は最下位(基本は米担当) */
+const LINE_LEAD=["山本","森山"];   /* 上中は盛付の優先順位がラストなので先頭候補から外す */
+const LINE_SKILL=["山本","森山","松山","ローズ","竹村","林","斉藤","山田"];  /* 直近30日の実績から算出(2026-09-29) */
+const LINE_LAST=["上中","浦田"];   /* 盛付に入る優先順位は最下位(上中=折の担当、浦田=米担当) */
 const LINE_CHECK=["藤田","見城","青木"];
 function orderPours(pours){
   const rest=[...pours], checks=[], lasts=[];
