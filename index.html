@@ -379,6 +379,10 @@ const FIX_MIN = {
   "198":"3",   /* 金賞唐揚げ弁当 */
   "397":"5",   /* 金賞唐揚げ 単品5個入 */
   "398":"5",   /* 大御所唐揚げ 単品5個入(塩) */
+  /* 2026-09-15〜10-08の実績に合わせた値 */
+  "日替わり準備":"5",
+  "プチ":"10",          /* 15分→10分 */
+  "ごはん屋弁当":"40",   /* 45分→40分 */
 };
 
 let master = [], members = [], rules = {}, defRoles = {}, day = null, curDate = "";
@@ -1813,9 +1817,9 @@ async function importSikomi(buf){
     if(!hol) all.push(dayNote(fixedRow("weekly/ピラフ/のし","5","")));  /* 大御所唐揚げ単品(398)の下 */
     all.push(...newRows);
     if(!hol){
-      all.push(fixedRow("日替わり準備","","5","5"), fixedRow("プチ","","15","5"));
-      const g=gohan[0]||fixedRow("ごはん屋弁当","","45","5");
-      g.min="45"; g.end="9:00"; g.endMan=true; g.note="";
+      all.push(fixedRow("日替わり準備","","","5"), fixedRow("プチ","","","5"));
+      const g=gohan[0]||fixedRow("ごはん屋弁当","","","5");
+      g.min=FIX_MIN["ごはん屋弁当"]; g.end="9:00"; g.endMan=true; g.note="";
       all.push(g);
     } else all.push(...gohan);
     all.push(...odv);
