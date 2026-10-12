@@ -267,6 +267,7 @@ table.costT td.muted{color:var(--mut)}
     <button class="btn warn" id="btnDelDay">この日を削除</button>
     <span class="sep"></span>
     <button class="btn" id="btnExport">バックアップ保存</button>
+    <button class="btn" id="btnExportDownload" title="通常のダウンロードフォルダへ保存">バックアップDL</button>
     <button class="btn" id="btnImport">バックアップ読込</button>
     <input type="file" id="impFile" accept=".json" style="display:none">
     <span class="sep"></span>
@@ -2243,6 +2244,7 @@ $("btnTplSave").onclick=tplSave;
 $("btnTplDel").onclick=tplDel;
 $("btnExport").onclick=e=>doExport(e.shiftKey,e.ctrlKey||e.metaKey);
 $("btnExport").title="OneDriveの工程表フォルダなど、決めた場所に保存します(Shift: 保存先を選び直し / Ctrl: 通常ダウンロード)";
+$("btnExportDownload").onclick=()=>doExport(false,true);
 $("btnImport").onclick=()=>$("impFile").click();
 $("impFile").addEventListener("change",e=>{ if(e.target.files[0]) doImport(e.target.files[0]); e.target.value=""; });
 $("btnSikomi").onclick=()=>$("sikomiFile").click();
