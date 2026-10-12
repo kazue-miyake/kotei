@@ -226,7 +226,7 @@ table.costT td.muted{color:var(--mut)}
 <body>
 <div class="app">
 <div class="topbar">
-  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v27.2.1 原価管理</span>
+  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v27.3 原価管理</span>
   <span class="savestat" id="saveStat"></span>
   <button class="btn" id="btnLogout" style="font-size:11px;padding:3px 8px;border-color:#8fa5c0;color:#cfd9e6;background:transparent">ログアウト</button>
   <div class="tabs">
@@ -343,12 +343,12 @@ table.costT td.muted{color:var(--mut)}
     <div class="costhero">
       <div>
         <h2>お弁当 原価ダッシュボード</h2>
-        <p>メニューリンクの「月間献立原価表」を1回取り込むと、商品番号・記号で工程表の商品マスターと自動照合します。<br>
+        <p>メニューリンクの「月間献立原価表」を複数月まとめて取り込むと、商品番号・記号で工程表の商品マスターと自動照合し、新しい月の原価を優先します。<br>
           自動で決められない商品だけ「工程表の商品」で確認してください。包材費と販売価格は後から入力できます。</p>
       </div>
       <div class="costtools">
-        <button class="btn pri" id="btnCostImport">月間献立原価表を取込</button>
-        <input type="file" id="costFile" accept=".xlsx,.xlsm,.xls" style="display:none">
+        <button class="btn pri" id="btnCostImport">月間献立原価表を取込（複数可）</button>
+        <input type="file" id="costFile" accept=".xlsx,.xlsm,.xls" multiple style="display:none">
         <input type="text" id="costFilter" placeholder="商品番号・商品名・食種で検索">
         <label style="font-size:11px"><input type="checkbox" id="costOnlyReview"> 要確認だけ</label>
       </div>
@@ -1486,10 +1486,16 @@ async function collectBackup(){
   for(const k of tkeys){ let v=null; try{ v=await stGet(k); }catch(e){} if(v) tpls[k.replace("kotei-tpl:","")]=v; }
   return {ver:3,exported:new Date().toISOString(),master,members,rules,defRoles,costs:costState,days,tpls};
 }
-async function doExport(rePick){
+function downloadBackupJson(json,fname){
+  const blob=new Blob([json],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download=fname; a.click(); URL.revokeObjectURL(a.href);
+}
+async function doExport(rePick,directDownload){
   const json=JSON.stringify(await collectBackup(),null,1);
   const hm=new Date().toTimeString().slice(0,5).replace(":","");
   const fname="工程表バックアップ_"+todayStr()+"_"+hm+".json";
+  if(directDownload){ downloadBackupJson(json,fname); return; }
   if(window.showDirectoryPicker){
     try{
       let dir=rePick? null : await bkGetDir();
@@ -1514,9 +1520,7 @@ async function doExport(rePick){
       alert("この開き方(ファイルを直接開く方式)では、ブラウザの制限でフォルダへの直接保存ができません。\n代わりに通常のダウンロードで保存します(ふつうは「ダウンロード」フォルダに入ります)。\n\n毎回OneDriveの工程表フォルダに保存したい場合:\nEdgeの右上「…」→ 設定 → ダウンロード → 「ダウンロード時の動作を毎回確認する」をON。\n保存のたびにフォルダを選べるようになります(前回の場所が最初に出ます)。");
     }
   }
-  const blob=new Blob([json],{type:"application/json"});
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
-  a.download=fname; a.click(); URL.revokeObjectURL(a.href);
+  downloadBackupJson(json,fname);
 }
 async function doImport(file){
   try{
@@ -2051,6 +2055,10 @@ function costDate(monthText,day){
   const m=String(monthText||"").match(/(\d{4})年(\d{1,2})月/); if(!m||!day) return "";
   return m[1]+"-"+String(+m[2]).padStart(2,"0")+"-"+String(day).padStart(2,"0");
 }
+function costMonthKey(monthText){
+  const m=String(monthText||"").match(/(\d{4})年(\d{1,2})月/);
+  return m?(+m[1])*100+(+m[2]):0;
+}
 function readMonthlyCostRows(buf,fileName){
   const wb=XLSX.read(buf,{type:"array"}), ws=wb.Sheets["月間献立原価表"]||wb.Sheets[wb.SheetNames[0]];
   /* メニューリンク出力ではシートの使用範囲(!ref)が先頭119行のままでも、
@@ -2081,7 +2089,7 @@ function readMonthlyCostRows(buf,fileName){
     }
     if(!days.length) continue; days.sort((a,b)=>a.day-b.day);
     const latest=days[days.length-1], vals=days.map(x=>x.foodCost).filter(x=>x!=null);
-    found.push({menuFood:food,service:service,sourceDate:latest.date,sourceMenu:latest.menu,
+    found.push({menuFood:food,service:service,sourceDate:latest.date,sourceMonth:monthText,sourceMenu:latest.menu,
       foodCost:latest.foodCost,reportSalePrice:latest.salePrice,days:days.length,
       minCost:vals.length?Math.min.apply(null,vals):null,maxCost:vals.length?Math.max.apply(null,vals):null,
       spread:vals.length?Math.max.apply(null,vals)-Math.min.apply(null,vals):0});
@@ -2089,24 +2097,49 @@ function readMonthlyCostRows(buf,fileName){
   if(!found.length) throw new Error("月間献立原価表の形式を確認できませんでした。メニューリンクからExcel保存したファイルを選んでください。");
   return {sourceName:fileName,sourceMonth:sourceMonth,rows:found};
 }
-async function importMonthlyCosts(buf,fileName){
-  await loadXLSX(); const parsed=readMonthlyCostRows(buf,fileName);
+async function importMonthlyCostFiles(files){
+  await loadXLSX();
+  const parsed=[];
+  for(const file of files) parsed.push(readMonthlyCostRows(await file.arrayBuffer(),file.name));
+  parsed.sort((a,b)=>costMonthKey(b.sourceMonth)-costMonthKey(a.sourceMonth));
   const oldReport=new Map((costState.rows||[]).filter(r=>r.menuFood).map(r=>[String(r.menuFood)+"\u0000"+String(r.service||""),r]));
   const oldMaster=new Map((costState.rows||[]).filter(r=>r.masterKey).map(r=>[r.masterKey,r]));
-  let rows=parsed.rows.map(r=>{
-    const prev=oldReport.get(String(r.menuFood)+"\u0000"+String(r.service||""))||null;
-    const mm=resolveCostMatch(r,prev);
-    const old=prev||oldMaster.get(mm.masterKey)||null;
-    return Object.assign(r,mm,{salePrice:r.reportSalePrice||(old?old.salePrice:"")||"",
-      packageCost:old&&old.packageCost!==undefined?old.packageCost:""});
+  let rows=(costState.rows||[]).map(r=>Object.assign({},r));
+  const byMaster=new Map(rows.filter(r=>r.masterKey).map(r=>[r.masterKey,r]));
+  let imported=0,matched=0,updated=0,unmatched=0;
+  parsed.forEach(month=>{
+    imported+=month.rows.length;
+    let monthRows=month.rows.map(r=>{
+      const prev=oldReport.get(String(r.menuFood)+"\u0000"+String(r.service||""))||null;
+      const mm=resolveCostMatch(r,prev), old=prev||oldMaster.get(mm.masterKey)||null;
+      return Object.assign(r,mm,{salePrice:old&&old.salePrice!==undefined?old.salePrice:"",
+        packageCost:old&&old.packageCost!==undefined?old.packageCost:""});
+    });
+    monthRows=collapseCostRows(monthRows);
+    monthRows.forEach(r=>{
+      if(!r.masterKey){ unmatched++; return; }
+      matched++;
+      const current=byMaster.get(r.masterKey), newer=!current||r.foodCost!=null&&(current.foodCost==null||String(r.sourceDate||"")>=String(current.sourceDate||""));
+      if(!newer) return;
+      if(current){
+        const sale=current.salePrice, pack=current.packageCost, manual=current.match==="manual";
+        Object.assign(current,r);
+        current.salePrice=sale!==undefined?sale:""; current.packageCost=pack!==undefined?pack:"";
+        if(manual) current.match="manual";
+      }else{
+        rows.push(r); byMaster.set(r.masterKey,r);
+      }
+      updated++;
+    });
   });
-  const imported=rows.length, matched=rows.filter(r=>r.masterKey).length;
   rows=ensureAllMasterCostRows(collapseCostRows(rows),oldMaster);
-  if(!confirm(fileName+" から "+imported+"食種を読み取りました。\n工程表の商品に自動照合: "+matched+"件\n要確認: "+(imported-matched)+"件\n工程表の登録商品: "+costMasterList().length+"件\n\nこの内容で原価一覧を更新しますか?")) return false;
-  costState={version:1,sourceName:parsed.sourceName,sourceMonth:parsed.sourceMonth,importedAt:new Date().toISOString(),rows:rows};
+  const months=[costState.sourceMonth].concat(parsed.map(x=>x.sourceMonth)).filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).sort((a,b)=>costMonthKey(b)-costMonthKey(a));
+  const names=[costState.sourceName].concat(parsed.map(x=>x.sourceName)).filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i);
+  if(!confirm(parsed.length+"ファイル（"+months.join("・")+"）から "+imported+"食種を読み取りました。\n工程表の商品に照合: "+matched+"件\n今回、より新しい原価へ更新: "+updated+"件\n未照合のため反映しない食種: "+unmatched+"件\n\n既存の販売価格・包材費・手動照合は保持します。更新しますか?")) return false;
+  costState={version:2,sourceName:names.length+"ファイル",sourceNames:names,sourceMonth:months[0]||"",sourceMonths:months,importedAt:new Date().toISOString(),rows:rows};
   if(!(await stSet("kotei-costs",costState))) throw new Error("原価データをクラウドへ保存できませんでした");
   renderCost(); setStat("原価表を保存しました "+new Date().toTimeString().slice(0,5));
-  alert("原価表を取り込みました。\n要確認の商品だけ、一覧の『工程表の商品』を選び直してください。\n包材費は空欄のまま保存されています。");
+  alert("原価表を取り込みました。\n各商品は取り込んだ月のうち最も新しい原価を表示します。\n既存の販売価格・包材費・手動照合は保持されています。");
   return true;
 }
 function schedCost(){
@@ -2127,7 +2160,8 @@ function renderCost(){
   refreshCostKpis(rows,mmap);
   if(rows.length){
     const when=costState.importedAt?new Date(costState.importedAt).toLocaleString("ja-JP"):"";
-    $("costMeta").textContent="工程表の商品マスター全"+mmap.size+"件を表示 ／ 取込元: "+(costState.sourceName||"月間献立原価表")+" ／ "+(costState.sourceMonth||"")+" ／ 更新: "+when+"　※今月使われていない商品は原価空欄です。包材費が空欄の間は0円として仮計算し、入力後に合計原価・粗利・原価率を再計算します。";
+    const months=Array.isArray(costState.sourceMonths)&&costState.sourceMonths.length?costState.sourceMonths:[costState.sourceMonth].filter(Boolean);
+    $("costMeta").textContent="工程表の商品マスター全"+mmap.size+"件を表示 ／ 取込月: "+months.join("・")+" ／ 更新: "+when+"　※商品ごとに最も新しい月の原価を採用します。包材費が空欄の間は0円として仮計算します。";
   }else $("costMeta").textContent="まだ原価表を取り込んでいません。";
   const q=String($("costFilter").value||"").trim().toLowerCase(), only=$("costOnlyReview").checked;
   const view=rows.map((r,i)=>({r:r,i:i,m:mmap.get(r.masterKey)})).filter(x=>{
@@ -2138,6 +2172,7 @@ function renderCost(){
   if(!view.length) h+="<tr><td colspan='10' class='muted' style='padding:24px;text-align:center'>表示する商品がありません。</td></tr>";
   view.forEach(x=>{ const r=x.r, m=x.m, fc=costNum(r.foodCost), pc=costNum(r.packageCost), sp=costNum(r.salePrice), total=fc==null?null:fc+(pc||0), profit=sp&&total!=null?sp-total:null, rate=sp&&total!=null?total/sp*100:null;
     let badge=!r.menuFood&&m?"<span class='costbadge'>原価未取得</span>":(m?(r.match==="manual"?"<span class='costbadge warn'>手動照合</span>":"<span class='costbadge ok'>自動照合</span>"):"<span class='costbadge none'>要確認</span>");
+    if(fc!=null&&r.sourceMonth&&costMonthKey(r.sourceMonth)<costMonthKey(costState.sourceMonth)) badge+="<span class='costnote'>"+esc(r.sourceMonth)+"採用</span>";
     if(r.spread>5) badge+="<span class='costnote'>月内変動 "+costYen(r.minCost)+"〜"+costYen(r.maxCost)+"</span>";
     let mapCell="<span>"+esc(m?costMasterLabel(m):"")+"</span>";
     if(r.menuFood){
@@ -2146,7 +2181,7 @@ function renderCost(){
       mapCell="<select data-map='1'>"+opts+"</select>";
     }
     h+="<tr data-ci='"+x.i+"'><td>"+badge+"</td><td>"+mapCell+"</td>"+
-      "<td>"+(r.menuFood?esc(r.menuFood):"<span class='muted'>今月データなし</span>")+"<span class='costnote' title=\""+esc(r.sourceMenu)+"\">"+esc(r.sourceMenu)+"</span></td>"+
+      "<td>"+(r.menuFood?esc(r.menuFood):"<span class='muted'>取込月にデータなし</span>")+"<span class='costnote' title=\""+esc(r.sourceMenu)+"\">"+esc(r.sourceMenu)+"</span></td>"+
       "<td class='muted'>"+esc(r.sourceDate||"")+"</td>"+
       "<td><input type='number' min='0' step='1' data-cf='salePrice' value=\""+esc(r.salePrice)+"\" placeholder='未入力'></td>"+
       "<td class='money'>"+costYen(fc)+"</td>"+
@@ -2206,8 +2241,8 @@ $("btnCopy").onclick=async()=>{
 $("btnTplApply").onclick=tplApply;
 $("btnTplSave").onclick=tplSave;
 $("btnTplDel").onclick=tplDel;
-$("btnExport").onclick=e=>doExport(e.shiftKey);
-$("btnExport").title="OneDriveの工程表フォルダなど、決めた場所に保存します(Shiftを押しながらクリックで保存先を選び直し)";
+$("btnExport").onclick=e=>doExport(e.shiftKey,e.ctrlKey||e.metaKey);
+$("btnExport").title="OneDriveの工程表フォルダなど、決めた場所に保存します(Shift: 保存先を選び直し / Ctrl: 通常ダウンロード)";
 $("btnImport").onclick=()=>$("impFile").click();
 $("impFile").addEventListener("change",e=>{ if(e.target.files[0]) doImport(e.target.files[0]); e.target.value=""; });
 $("btnSikomi").onclick=()=>$("sikomiFile").click();
@@ -2296,8 +2331,8 @@ $("mstT").addEventListener("click",mstClick);
 
 $("btnCostImport").onclick=()=>$("costFile").click();
 $("costFile").addEventListener("change",async e=>{
-  const f=e.target.files[0]; e.target.value=""; if(!f) return;
-  try{ await importMonthlyCosts(await f.arrayBuffer(),f.name); }
+  const files=Array.from(e.target.files||[]); e.target.value=""; if(!files.length) return;
+  try{ await importMonthlyCostFiles(files); }
   catch(err){ alert("原価表を取り込めませんでした: "+((err&&err.message)||err)); setStat("原価取込エラー",true); }
 });
 $("costFilter").addEventListener("input",renderCost);
@@ -2402,3 +2437,4 @@ $("btnLogout").onclick=()=>{
 </script>
 </body>
 </html>
+
