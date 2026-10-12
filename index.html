@@ -226,7 +226,7 @@ table.costT td.muted{color:var(--mut)}
 <body>
 <div class="app">
 <div class="topbar">
-  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v27.2 原価管理</span>
+  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v27.2.1 原価管理</span>
   <span class="savestat" id="saveStat"></span>
   <button class="btn" id="btnLogout" style="font-size:11px;padding:3px 8px;border-color:#8fa5c0;color:#cfd9e6;background:transparent">ログアウト</button>
   <div class="tabs">
@@ -2053,6 +2053,16 @@ function costDate(monthText,day){
 }
 function readMonthlyCostRows(buf,fileName){
   const wb=XLSX.read(buf,{type:"array"}), ws=wb.Sheets["月間献立原価表"]||wb.Sheets[wb.SheetNames[0]];
+  /* メニューリンク出力ではシートの使用範囲(!ref)が先頭119行のままでも、
+     実セルは2,000行以上ある場合がある。実在セルから範囲を補正して全件読む。 */
+  let actualRange=XLSX.utils.decode_range(ws["!ref"]||"A1:A1");
+  for(const addr in ws){
+    if(addr.charAt(0)==="!") continue;
+    const pos=XLSX.utils.decode_cell(addr);
+    if(pos.r>actualRange.e.r) actualRange.e.r=pos.r;
+    if(pos.c>actualRange.e.c) actualRange.e.c=pos.c;
+  }
+  ws["!ref"]=XLSX.utils.encode_range(actualRange);
   const arr=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:"",blankrows:true});
   const found=[]; let sourceMonth="";
   for(let s=0;s<arr.length;s++){
