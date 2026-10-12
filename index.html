@@ -226,7 +226,7 @@ table.costT td.muted{color:var(--mut)}
 <body>
 <div class="app">
 <div class="topbar">
-  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v27.3 原価管理</span>
+  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v27.4 原価管理</span>
   <span class="savestat" id="saveStat"></span>
   <button class="btn" id="btnLogout" style="font-size:11px;padding:3px 8px;border-color:#8fa5c0;color:#cfd9e6;background:transparent">ログアウト</button>
   <div class="tabs">
@@ -350,6 +350,7 @@ table.costT td.muted{color:var(--mut)}
       <div class="costtools">
         <button class="btn pri" id="btnCostImport">月間献立原価表を取込（複数可）</button>
         <input type="file" id="costFile" accept=".xlsx,.xlsm,.xls" multiple style="display:none">
+        <button class="btn" id="btnCostCsv">CSV出力（表示中）</button>
         <input type="text" id="costFilter" placeholder="商品番号・商品名・食種で検索">
         <label style="font-size:11px"><input type="checkbox" id="costOnlyReview"> 要確認だけ</label>
       </div>
@@ -2156,19 +2157,43 @@ function refreshCostKpis(rows,mmap){
   $("costKpiAvg").textContent=totals.length?costYen(totals.reduce((a,b)=>a+b,0)/totals.length):"—";
   $("costKpiProfit").textContent=profits.length?costYen(profits.reduce((a,b)=>a+b,0)/profits.length):"—";
 }
-function renderCost(){
+function costViewRows(){
   const rows=Array.isArray(costState.rows)?costState.rows:[], list=costMasterList(), mmap=new Map(list.map(m=>[m._key,m]));
+  const q=String($("costFilter").value||"").trim().toLowerCase(), only=$("costOnlyReview").checked;
+  const view=rows.map((r,i)=>({r:r,i:i,m:mmap.get(r.masterKey)})).filter(x=>{
+    if(only&&x.m) return false;
+    const hay=[x.r.menuFood,x.r.service,x.r.sourceMenu,x.m&&x.m.code,x.m&&x.m.sym,x.m&&x.m.name].join(" ").toLowerCase();
+    return !q||hay.includes(q);
+  });
+  return {rows,list,mmap,view};
+}
+function csvCell(v){
+  const s=v==null?"":String(v);
+  return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+function exportCostCsv(){
+  const data=costViewRows(), header=["状態","商品番号","記号","工程表の商品名","メニューリンク食種","提供時間","最新日","採用月","販売価格（税別）","食材原価（税別）","包材費（税別）","合計原価（税別）","粗利","原価率（%）"];
+  const lines=[header.map(csvCell).join(",")];
+  data.view.forEach(x=>{
+    const r=x.r,m=x.m,fc=costNum(r.foodCost),pc=costNum(r.packageCost),sp=costNum(r.salePrice);
+    const total=fc==null?null:fc+(pc||0),profit=sp&&total!=null?sp-total:null,rate=sp&&total!=null?total/sp*100:null;
+    const status=!r.menuFood&&m?"原価未取得":(m?(r.match==="manual"?"手動照合":"自動照合"):"要確認");
+    lines.push([status,m&&m.code,m&&m.sym,m&&m.name,r.menuFood,r.service,r.sourceDate,r.sourceMonth,sp,fc,pc,total,profit,rate==null?"":rate.toFixed(1)].map(csvCell).join(","));
+  });
+  const now=new Date(),hm=String(now.getHours()).padStart(2,"0")+String(now.getMinutes()).padStart(2,"0");
+  const fname="お弁当原価一覧_"+todayStr().replace(/-/g,"")+"_"+hm+".csv";
+  const blob=new Blob(["\ufeff"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=fname; a.click(); URL.revokeObjectURL(a.href);
+  setStat("原価CSVを出力しました "+data.view.length+"件");
+}
+function renderCost(){
+  const data=costViewRows(),rows=data.rows,list=data.list,mmap=data.mmap,view=data.view;
   refreshCostKpis(rows,mmap);
   if(rows.length){
     const when=costState.importedAt?new Date(costState.importedAt).toLocaleString("ja-JP"):"";
     const months=Array.isArray(costState.sourceMonths)&&costState.sourceMonths.length?costState.sourceMonths:[costState.sourceMonth].filter(Boolean);
     $("costMeta").textContent="工程表の商品マスター全"+mmap.size+"件を表示 ／ 取込月: "+months.join("・")+" ／ 更新: "+when+"　※商品ごとに最も新しい月の原価を採用します。包材費が空欄の間は0円として仮計算します。";
   }else $("costMeta").textContent="まだ原価表を取り込んでいません。";
-  const q=String($("costFilter").value||"").trim().toLowerCase(), only=$("costOnlyReview").checked;
-  const view=rows.map((r,i)=>({r:r,i:i,m:mmap.get(r.masterKey)})).filter(x=>{
-    if(only&&x.m) return false;
-    const hay=[x.r.menuFood,x.r.service,x.r.sourceMenu,x.m&&x.m.code,x.m&&x.m.sym,x.m&&x.m.name].join(" ").toLowerCase(); return !q||hay.includes(q);
-  });
   let h="<thead><tr><th>状態</th><th style='min-width:225px'>工程表の商品</th><th style='min-width:175px'>メニューリンク食種</th><th>最新日</th><th>販売価格</th><th>食材原価</th><th>包材費</th><th>合計原価</th><th>粗利</th><th>原価率</th></tr></thead><tbody>";
   if(!view.length) h+="<tr><td colspan='10' class='muted' style='padding:24px;text-align:center'>表示する商品がありません。</td></tr>";
   view.forEach(x=>{ const r=x.r, m=x.m, fc=costNum(r.foodCost), pc=costNum(r.packageCost), sp=costNum(r.salePrice), total=fc==null?null:fc+(pc||0), profit=sp&&total!=null?sp-total:null, rate=sp&&total!=null?total/sp*100:null;
@@ -2332,6 +2357,7 @@ $("mstT").addEventListener("input",mstInput);
 $("mstT").addEventListener("click",mstClick);
 
 $("btnCostImport").onclick=()=>$("costFile").click();
+$("btnCostCsv").onclick=exportCostCsv;
 $("costFile").addEventListener("change",async e=>{
   const files=Array.from(e.target.files||[]); e.target.value=""; if(!files.length) return;
   try{ await importMonthlyCostFiles(files); }
