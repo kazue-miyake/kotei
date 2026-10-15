@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>発注管理 データ移行ツール</title>
+<style>
+  body { font-family: sans-serif; background:#f4f1ec; color:#2d1a0e; margin:0; padding:24px; }
+  .card { background:#fff; max-width:520px; margin:24px auto; border-radius:14px; box-shadow:0 2px 16px rgba(45,26,14,.1); padding:24px; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  .sub { font-size:12px; color:#8a7060; margin-bottom:18px; }
+  .box { background:#f8f5f1; border:1px solid #e0d8ce; border-radius:10px; padding:14px; font-size:14px; line-height:1.9; margin-bottom:16px; }
+  .big { font-size:22px; font-weight:800; color:#c8522a; }
+  button { background:#c8522a; color:#fff; border:none; border-radius:10px; padding:14px 20px; font-size:16px; font-weight:700; cursor:pointer; width:100%; font-family:sans-serif; }
+  button:hover { background:#b04020; }
+  button:disabled { opacity:.6; cursor:default; }
+  .ok { color:#4a8c5c; font-weight:700; }
+  .err { color:#d94f3d; font-weight:700; }
+  .hint { font-size:12px; color:#8a7060; margin-top:14px; line-height:1.7; }
+  input { width:100%; padding:11px; border:1.5px solid #e0d8ce; border-radius:8px; font-size:15px; box-sizing:border-box; margin-top:6px; }
+  .row { margin-bottom:12px; }
+  label { font-size:12px; font-weight:700; color:#8a7060; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>📦 発注管理（旧）データ移行ツール</h1>
+  <div class="sub">このブラウザに残っている「発注管理（旧アプリ）」のデータを、クラウド版に引き継ぐためのツールです。</div>
+  <div class="box" id="status">データを確認しています…</div>
+  <div id="loginArea" style="display:none">
+    <div class="row">
+      <label>メールアドレス</label>
+      <input type="email" id="email" value="kazue1350@gmail.com">
+    </div>
+    <div class="row">
+      <label>パスワード（発注管理アプリと同じ）</label>
+      <input type="password" id="pass" placeholder="パスワード">
+    </div>
+  </div>
+  <button id="sendBtn" onclick="send()" disabled>クラウドへ送る</button>
+  <div class="hint">※ このボタンを押すとデータがクラウドに送られます。元のデータはそのまま残ります。送信後の取り込み作業はこちらで行います。</div>
+</div>
+<script>
+const SB_URL="https://fnlstmlcaivptqkkjgpn.supabase.co";
+const SB_ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZubHN0bWxjYWl2cHRxa2tqZ3BuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1NDA1MjgsImV4cCI6MjA5OTExNjUyOH0.iA9z-X6gvIZjhTszEYWK3WZZNZE35OAC7hceSYNjfvY";
+let payload=null, access=null;
+
+function readLocal(){
+  const out={};
+  for(const k of ['chikusui_order_app_v2','chikusui_order_app_v1']){
+    try{ const raw=localStorage.getItem(k); if(raw) out[k]=JSON.parse(raw); }catch(e){ out[k+'_error']=String(e); }
+  }
+  return out;
+}
+function summarize(d){
+  const v2=d['chikusui_order_app_v2'];
+  if(!v2){ return 'このブラウザには「発注管理（旧）」のデータが見つかりませんでした。別の端末・ブラウザで使っていた可能性があります。'; }
+  const hist=Array.isArray(v2.historyData)?v2.historyData.length:0;
+  let itemCount=0, supCount=0;
+  if(v2.items && typeof v2.items==='object'){
+    for(const s of Object.keys(v2.items)){ const o=v2.items[s]; const arr=Array.isArray(o)?o:(o&&o.items); if(Array.isArray(arr)){ supCount++; itemCount+=arr.length; } }
+  }
+  const cart=Array.isArray(v2.cart)?v2.cart.length:0;
+  return '見つかりました：<br><span class="big">発注履歴 '+hist+' 件</span><br>品目 '+itemCount+' 件（発注先 '+supCount+'）／カート '+cart+' 件<br>最終保存：'+(v2.savedAt||'不明');
+}
+
+(function init(){
+  payload=readLocal();
+  document.getElementById('status').innerHTML=summarize(payload);
+  const has=!!payload['chikusui_order_app_v2'];
+  document.getElementById('sendBtn').disabled=!has;
+  // 自動ログイン用トークンがあるか
+  let rt=null; try{ rt=localStorage.getItem('hatchu-rt'); }catch(e){}
+  if(!rt){ document.getElementById('loginArea').style.display='block'; }
+})();
+
+async function ensureLogin(){
+  if(access) return true;
+  let rt=null; try{ rt=localStorage.getItem('hatchu-rt'); }catch(e){}
+  if(rt){
+    const r=await fetch(SB_URL+"/auth/v1/token?grant_type=refresh_token",{method:"POST",headers:{apikey:SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({refresh_token:rt})});
+    const j=await r.json().catch(()=>({}));
+    if(r.ok&&j.access_token){ access=j.access_token; try{localStorage.setItem('hatchu-rt',j.refresh_token);}catch(e){} return true; }
+  }
+  // パスワードでログイン
+  const email=document.getElementById('email').value.trim();
+  const pass=document.getElementById('pass').value;
+  if(!email||!pass){ document.getElementById('loginArea').style.display='block'; throw new Error('パスワードを入力してください'); }
+  const r2=await fetch(SB_URL+"/auth/v1/token?grant_type=password",{method:"POST",headers:{apikey:SB_ANON,"Content-Type":"application/json"},body:JSON.stringify({email,password:pass})});
+  const j2=await r2.json().catch(()=>({}));
+  if(!r2.ok||!j2.access_token){ throw new Error('ログインできませんでした（パスワードを確認してください）'); }
+  access=j2.access_token; try{localStorage.setItem('hatchu-rt',j2.refresh_token);}catch(e){}
+  return true;
+}
+
+async function send(){
+  const btn=document.getElementById('sendBtn'); btn.disabled=true;
+  const st=document.getElementById('status');
+  try{
+    await ensureLogin();
+    const body={ key:'hatchu-codex-raw', value:{ data:payload, exportedAt:new Date().toISOString(), ua:navigator.userAgent }, updated_at:new Date().toISOString() };
+    const r=await fetch(SB_URL+"/rest/v1/kv",{method:"POST",headers:{apikey:SB_ANON,Authorization:"Bearer "+access,"Content-Type":"application/json","Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(body)});
+    if(!r.ok) throw new Error("送信失敗 HTTP "+r.status);
+    st.innerHTML='<span class="ok">✅ 送信できました！</span><br>このページは閉じて大丈夫です。あとはこちらで取り込み作業を行います。';
+    btn.style.display='none';
+  }catch(e){
+    st.innerHTML='<span class="err">⚠️ '+(e&&e.message?e.message:e)+'</span>';
+    document.getElementById('loginArea').style.display='block';
+    btn.disabled=false;
+  }
+}
+</script>
+</body>
+</html>
