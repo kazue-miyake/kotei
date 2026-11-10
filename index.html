@@ -226,7 +226,7 @@ table.costT td.muted{color:var(--mut)}
 <body>
 <div class="app">
 <div class="topbar">
-  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v27.5 原価管理</span>
+  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v27.6 原価管理</span>
   <span class="savestat" id="saveStat"></span>
   <button class="btn" id="btnLogout" style="font-size:11px;padding:3px 8px;border-color:#8fa5c0;color:#cfd9e6;background:transparent">ログアウト</button>
   <div class="tabs">
@@ -427,6 +427,8 @@ const CHECK_BACKUP = "青木";
 const FORCE_POUR = ["松山","山本"];
 /* 枠が「早洗」などその他の枠でも、盛付の担当に入れる人(先頭もできる) */
 const ALWAYS_POUR = ["森山"];
+/* 「早洗」の枠の人も盛付の担当に入れる(2026-11-10の実績どおり。林・松尾・掛川など) */
+const isHayaArai = a => /早洗/.test(String(a&&a.r1||"")+String(a&&a.r2||""));
 /* 盛付の人が必要人数より多いとき、この順に盛付から外して別の仕事へ回す。
    一度外れた人はその日の以降の行でも外れたまま。名前を足したい・順番を変えたいときはここを直す */
 const RELEASE_ORDER = [
@@ -779,12 +781,13 @@ function isChkAtt(a){
 function baseAsg(b){ // ブロック①はシフト表の盛付枠(左から)。ブロック②は空(手動)
   if(b>0) return Array(NASG).fill("");
   /* 盛付枠(青)を左から。チェック枠(H・藤田/見城など)は担当のいちばん最後の升へ */
-  const pour=[],chk=[];
+  const pour=[],late=[],chk=[];
   day.att.forEach(a=>{ if(a.fixed||!a.name) return;
     if(isChkAtt(a)) chk.push(a.name);
-    else if(a.pour!==false||ALWAYS_POUR.includes(a.name)) pour.push(a.name); });
+    else if(a.pour!==false||ALWAYS_POUR.includes(a.name)) pour.push(a.name);
+    else if(isHayaArai(a)) late.push(a.name); });  /* 早洗の人は盛付に入るが、先頭ではなく後ろ */
   /* ここでは人数を切らない(行ごとに出勤時間で絞ってから必要人数だけ入れるため) */
-  const names=pour.concat(chk);
+  const names=pour.concat(late,chk);
   while(names.length<NASG) names.push("");
   return names;
 }
