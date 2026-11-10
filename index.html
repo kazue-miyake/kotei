@@ -226,7 +226,7 @@ table.costT td.muted{color:var(--mut)}
 <body>
 <div class="app">
 <div class="topbar">
-  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v27.4 原価管理</span>
+  <h1>製造工程表</h1><span class="sub">盛付スケジュール管理 v27.5 原価管理</span>
   <span class="savestat" id="saveStat"></span>
   <button class="btn" id="btnLogout" style="font-size:11px;padding:3px 8px;border-color:#8fa5c0;color:#cfd9e6;background:transparent">ログアウト</button>
   <div class="tabs">
@@ -793,6 +793,11 @@ function asgN(r){ // 自動で入れる人数 = 商品の盛付人数(空欄な�
   return (isFinite(v)&&v>0)? Math.min(v,NASG) : 4;
 }
 /* weekly(並べ作業)は「人が余っていれば余った人数、余っていなければ全員」 */
+/* この行には入れない人(行の名前で指定)。ここを直せば増減できる */
+const ROW_NG = [
+  { match:/翌日(用)?カップ/, names:["松山","藤田","青木"] },
+];
+function ngNames(r){ const h=ROW_NG.find(x=>x.match.test(String(r&&r.name||""))); return h?h.names:null; }
 const isWeekly=r=>/weekly|ｳｨｰｸﾘｰ|ウィークリー/i.test(String(r&&r.name||""));
 /* シフト枠の出勤時間 → いられる時間帯 {from,to}(分)。"7:00～9:00"=両方 / "5:20"=開始のみ */
 function availWin(a){
@@ -855,7 +860,8 @@ function cascadeAsg(b,times){
     else{
       const o=(times&&times[i])||{start:null,end:null};
       /* 行の時間帯にいる人だけを並び順で(帰った人は外れて次の人が繰り上がり) */
-      const av=cur.filter(x=>x&&fitWin(win[x],o.start,o.end));
+      const ng=ngNames(r);   /* 翌日用カップなど、この行に入れない人 */
+      const av=cur.filter(x=>x&&fitWin(win[x],o.start,o.end)&&!(ng&&ng.includes(x)));
       let n=asgN(r);
       /* チェック枠(H)も必要人数のうちに数える。ただし表示はいつも担当のいちばん最後の升 */
       let cks=av.filter(x=>chkSet.has(x));
