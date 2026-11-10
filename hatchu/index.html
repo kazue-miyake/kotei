@@ -1438,19 +1438,19 @@ select.filter-select {
 <script>
 // ===== マスターデータ =====
 const suppliers = [
-  { id: 'takagi', name: 'タカギ産業', fax: '052-504-5367', note: '毎週火曜チェック・午前発注→翌日', tantou: '三宅', tel: '054-252-7948', place: '出荷口 スロープ上がった台車の上に置き配' },
-  { id: 'makino', name: '牧野', fax: '—', note: '返信FAXなし・納品時チェック', tantou: '三宅', tel: '070-1218-0429', place: '' },
-  { id: 'origami', name: '折政', fax: '054-273-8794', note: '午前発注→翌日', tantou: '三宅', tel: '070-1218-0429', place: '裏倉庫' },
-  { id: 'sangyo', name: '産業社', fax: '054-263-2325', note: '月末締め翌月払い', tantou: '三宅', tel: '070-1218-0429', place: '' },
-  { id: 'azumi', name: 'アヅミ産業', fax: '048-654-5434', note: '午前発注→木か金納品', tantou: '三宅', tel: '070-1218-0429', place: '裏倉庫（直送は出荷口 スロープ上がった台車の上に置き配）' },
-  { id: 'shinmura', name: '新村商店', fax: '054-201-9345', note: '土曜も配達可', tantou: '三宅', tel: '070-1218-0429', place: '裏倉庫（直送は出荷口 スロープ上がった台車の上に置き配）' },
-  { id: 'shingi', name: 'シンギ', fax: '0538-23-7791', note: '4ケース以上送料無料', tantou: '三宅', tel: '070-1218-0429', place: '裏倉庫（直送の場合は「出荷口 スロープ上がった台車の上に置き配」を明記）' },
-  { id: 'sanwa', name: 'サンワキョーエー', fax: '054-200-6880', note: '', tantou: '三宅', tel: '070-1218-0429', place: '' },
-  { id: 'fuji', name: '不二精機', fax: '045-472-2724', note: '送料1,300円', tantou: '三宅', tel: '070-1218-0429', place: '裏倉庫（直送は出荷口 スロープ上がった台車の上に置き配）' },
-  { id: 'okawara', name: '大川原紙器', fax: '0548-32-7822', note: '午前発注→3日後', tantou: '三宅', tel: '070-1218-0429', place: '裏倉庫' },
-  { id: 'chemical', name: '静岡ケミカル', fax: '054-647-6011', note: '', tantou: '三宅', tel: '070-1218-0429', place: '裏倉庫（⑯番の棚へ）' },
-  { id: 'bigmore', name: 'ビックモア', fax: '054278-4766', note: 'ユニフォーム・シューズ', tantou: '三宅', tel: '054-252-7948', place: '' },
-  { id: 'tsukamoto', name: 'つかもと印刷', fax: '054-273-5093', note: 'メール発注可（yasuhiro-takahashi@ukp.jp 高橋様）', tantou: '三宅', tel: '070-1218-0429', place: '裏倉庫（直送は出荷口 スロープ上がった台車の上に置き配）' },
+  { id: 'takagi', name: 'タカギ産業', printName: 'タカギ産業株式会社', fax: '052-504-5367', note: '毎週火曜チェック・午前発注→翌日', tantou: '三宅', tel: '054-252-7948', place: '出荷口 スロープ上がった台車の上に置き配' },
+  { id: 'makino', name: '牧野製袋', printName: '株式会社牧野製袋', fax: '—', note: '返信FAXなし・納品時チェック', tantou: '三宅', tel: '070-1218-0429', place: '' },
+  { id: 'origami', name: '折政商店', printName: '株式会社折政商店', fax: '054-273-8794', note: '午前発注→翌日', tantou: '三宅', tel: '070-1218-0429', place: '裏倉庫' },
+  { id: 'sangyo', name: '静岡産業社', printName: '株式会社静岡産業社', fax: '054-263-2325', note: '月末締め翌月払い', tantou: '三宅', tel: '070-1218-0429', place: '' },
+  { id: 'azumi', name: 'アヅミ産業', printName: 'アヅミ産業株式会社', fax: '048-654-5434', note: '午前発注→木か金納品', tantou: '三宅', tel: '070-1218-0429', place: '裏倉庫（直送は出荷口 スロープ上がった台車の上に置き配）' },
+  { id: 'shinmura', name: '新村商店', printName: '株式会社静岡合羽橋新村商店', fax: '054-201-9345', note: '土曜も配達可', tantou: '三宅', tel: '070-1218-0429', place: '裏倉庫（直送は出荷口 スロープ上がった台車の上に置き配）' },
+  { id: 'shingi', name: 'シンギ', printName: '株式会社シンギ', fax: '0538-23-7791', note: '4ケース以上送料無料', tantou: '三宅', tel: '070-1218-0429', place: '裏倉庫（直送の場合は「出荷口 スロープ上がった台車の上に置き配」を明記）' },
+  { id: 'sanwa', name: 'サンワキョーエー', printName: '株式会社サンワキョーエー', fax: '054-200-6880', note: '', tantou: '三宅', tel: '070-1218-0429', place: '' },
+  { id: 'fuji', name: '不二精機', printName: '不二精機株式会社', fax: '045-472-2724', note: '送料1,300円', tantou: '三宅', tel: '070-1218-0429', place: '裏倉庫（直送は出荷口 スロープ上がった台車の上に置き配）' },
+  { id: 'okawara', name: '大川原紙器', printName: '株式会社大川原紙器', fax: '0548-32-7822', note: '午前発注→3日後', tantou: '三宅', tel: '070-1218-0429', place: '裏倉庫' },
+  { id: 'chemical', name: '静岡ケミカル', printName: '株式会社静岡ケミカル', fax: '054-647-6011', note: '', tantou: '三宅', tel: '070-1218-0429', place: '裏倉庫（⑯番の棚へ）' },
+  { id: 'bigmore', name: 'ビックモア', printName: '株式会社ビックモア', fax: '054278-4766', note: 'ユニフォーム・シューズ', tantou: '三宅', tel: '054-252-7948', place: '' },
+  { id: 'tsukamoto', name: 'つかもと印刷', printName: 'つかもと印刷', fax: '054-273-5093', note: 'メール発注可（yasuhiro-takahashi@ukp.jp 高橋様）', tantou: '三宅', tel: '070-1218-0429', place: '裏倉庫（直送は出荷口 スロープ上がった台車の上に置き配）' },
   { id: 'karaage', name: '唐揚げカップ業者', fax: '—', note: '毎月25日（休日の場合休み明け）来社', tantou: '三宅', tel: '070-1218-0429', place: '' },
 ];
 
@@ -2293,7 +2293,7 @@ function buildPrintSheet(supplierName, supplierData, items, dateStr, orderNo) {
         <div>発注日：${dateStr}</div>
         <div>No. ${orderNo}</div>
       </div>
-      <div class="print-to">${escapeHtml(supplierName)} 御中</div>
+      <div class="print-to">${escapeHtml(supplierData.printName || supplierName)} 御中</div>
       <div class="print-fax">FAX：${escapeHtml(supplierData.fax || '—')}</div>
       <div class="print-from">
         <div class="company-name">株式会社 竹酔</div>
@@ -2340,6 +2340,7 @@ function buildGroupedFromCart() {
     if (!grouped[c.supplierName]) {
       const s = suppliers.find(s => s.name === c.supplierName);
       grouped[c.supplierName] = {
+        printName: s ? (s.printName || s.name) : c.supplierName,
         fax: s ? s.fax : '',
         note: s ? s.note : '',
         tel: s ? s.tel : '',
@@ -2403,6 +2404,7 @@ function reprintHistory(id) {
   const s = suppliers.find(s => s.name === h.supplier);
   const grouped = {};
   grouped[h.supplier] = {
+    printName: s ? (s.printName || s.name) : h.supplier,
     fax: s ? s.fax : '', note: s ? s.note : '', tel: s ? s.tel : '',
     tantou: s ? s.tantou : '', place: s ? s.place : '',
     items: h.items.map(i => ({ name: i.name, code: i.code || '', qty: i.qty, unit: i.unit, note: '', userNote: i.userNote || '' }))
